@@ -1,6 +1,22 @@
 package com.sri.aham.mantra.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
@@ -18,209 +35,558 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.TimerOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sri.aham.mantra.model.Mantra
 import com.sri.aham.mantra.viewmodel.MantraUiState
 import com.sri.aham.mantra.viewmodel.MantraViewModel
+import com.sri.aham.mantra.viewmodel.SleepTimerOptions
+
+// ---------------------------------------------------------------------------
+// Root screen composable
+// ---------------------------------------------------------------------------
 
 /**
- * Root composable for the Mantra / Meditation Player feature.
+ * Mantra / Meditation Player screen.
  *
- * Connects to [MantraViewModel] which in turn controls [MantraPlayerService].
- * The connection is started in a [DisposableEffect] so it is tied to the screen's
- * composition lifetime — disconnecting automatically when the user navigates away
- * while leaving the service (and any active playback) running in the background.
+ * Layout: two vertically-stacked sections.
+ *  1. **Hero** (top ~60%) — Om mandala animation, now-playing info, transport
+ *     controls, and sleep-timer row. Background is a gradient drawn from
+ *     `primaryContainer` to `surface`.
+ *  2. **Mantra list** (bottom ~40%) — scrollable radio-button list of available
+ *     mantras. Tapping a row loads and plays that mantra.
+ *
+ * A [DisposableEffect] drives [MantraViewModel.connect] / [MantraViewModel.disconnect]
+ * so the [MediaController] lifetime matches the screen's composition lifetime.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MantraScreen(viewModel: MantraViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Connect to MantraPlayerService while this screen is in the composition.
     DisposableEffect(Unit) {
         viewModel.connect()
         onDispose { viewModel.disconnect() }
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Mantra Player") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Mantra Player") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            )
+        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            NowPlayingCard(uiState = uiState)
-            TransportControls(
+            // ── Hero section ──────────────────────────────────────────────
+            HeroSection(
                 uiState = uiState,
-                onPlay = viewModel::play,
+                onPlay  = viewModel::play,
                 onPause = viewModel::pause,
-                onStop = viewModel::stop,
+                onStop  = viewModel::stop,
+                onSetTimer   = viewModel::setTimer,
+                onCancelTimer = viewModel::cancelTimer,
+                modifier = Modifier.weight(0.58f),
             )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            HorizontalDivider()
+
+            // ── Mantra list ───────────────────────────────────────────────
             MantraList(
-                mantras = uiState.mantras,
+                mantras  = uiState.mantras,
                 selected = uiState.selected,
                 onSelect = viewModel::selectAndPlay,
+                modifier = Modifier.weight(0.42f),
             )
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Now-playing card
+// Hero section
 // ---------------------------------------------------------------------------
 
-/**
- * Displays the selected mantra's title, description, and current playback status.
- * Shows a placeholder prompt when nothing is selected yet.
- */
 @Composable
-private fun NowPlayingCard(uiState: MantraUiState) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = uiState.selected?.title ?: "Select a mantra below",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = uiState.selected?.description
-                    ?: "Tap a mantra to begin looped playback.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            val statusText = when {
-                !uiState.isReady   -> "Connecting…"
-                uiState.isPlaying  -> "Playing  ∞  loop"
-                uiState.selected != null -> "Paused"
-                else               -> "—"
-            }
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
-            )
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Transport controls  ▶ / ⏸ / ⏹
-// ---------------------------------------------------------------------------
-
-/**
- * Play/Pause toggle and Stop button.
- * Buttons are disabled until [MantraUiState.isReady] is true and a mantra is selected.
- */
-@Composable
-private fun TransportControls(
+private fun HeroSection(
     uiState: MantraUiState,
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onStop: () -> Unit,
+    onSetTimer: (Int?) -> Unit,
+    onCancelTimer: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val enabled = uiState.isReady && uiState.selected != null
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Primary: Play / Pause toggle
-        FilledIconButton(
-            onClick = if (uiState.isPlaying) onPause else onPlay,
-            enabled = enabled,
-            modifier = Modifier.size(64.dp),
-        ) {
-            Icon(
-                imageVector = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (uiState.isPlaying) "Pause" else "Play",
-                modifier = Modifier.size(36.dp),
-            )
-        }
+    val gradientColors = listOf(
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.surface,
+    )
 
-        // Secondary: Stop (rewinds to start)
-        FilledTonalIconButton(
-            onClick = onStop,
-            enabled = enabled,
-            modifier = Modifier.size(48.dp),
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(gradientColors)),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Icon(
-                imageVector = Icons.Default.Stop,
-                contentDescription = "Stop",
+            // Pulsing Om mandala
+            OmMandala(
+                isPlaying = uiState.isPlaying,
+                modifier  = Modifier.size(160.dp),
+            )
+
+            // Now-playing info
+            NowPlayingInfo(uiState = uiState)
+
+            // Transport controls
+            TransportControls(
+                uiState  = uiState,
+                onPlay   = onPlay,
+                onPause  = onPause,
+                onStop   = onStop,
+            )
+
+            // Sleep timer
+            SleepTimerRow(
+                uiState       = uiState,
+                onSetTimer    = onSetTimer,
+                onCancelTimer = onCancelTimer,
             )
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Mantra selection list
+// Om mandala animation
+// ---------------------------------------------------------------------------
+
+/** Sine-like easing for the organic pulse feel. */
+private val SineInOut = CubicBezierEasing(0.37f, 0f, 0.63f, 1f)
+
+/**
+ * Animated concentric-circle mandala with the Om symbol (ॐ) at the centre.
+ *
+ * Three circles pulse at slightly offset durations (2 s / 2.5 s / 3 s) to
+ * produce a natural breathing-like rhythm. Animation is gated by [isPlaying]:
+ * when paused the circles settle to a calm resting size.
+ */
+@Composable
+private fun OmMandala(isPlaying: Boolean, modifier: Modifier = Modifier) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onSurface    = MaterialTheme.colorScheme.onSurface
+
+    val transition = rememberInfiniteTransition(label = "mandala")
+
+    val pulse1 by transition.animateFloat(
+        initialValue  = 0.72f, targetValue = 0.92f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = SineInOut), RepeatMode.Reverse),
+        label = "p1",
+    )
+    val pulse2 by transition.animateFloat(
+        initialValue  = 0.80f, targetValue = 1.00f,
+        animationSpec = infiniteRepeatable(tween(2500, easing = SineInOut), RepeatMode.Reverse),
+        label = "p2",
+    )
+    val pulse3 by transition.animateFloat(
+        initialValue  = 0.88f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(3000, easing = SineInOut), RepeatMode.Reverse),
+        label = "p3",
+    )
+
+    // When paused, freeze at a calm steady state.
+    val s1 = if (isPlaying) pulse1 else 0.82f
+    val s2 = if (isPlaying) pulse2 else 0.90f
+    val s3 = if (isPlaying) pulse3 else 0.98f
+
+    // Outer circle alpha breathes gently with playback.
+    val outerAlpha by animateFloatAsState(
+        targetValue = if (isPlaying) 0.30f else 0.12f,
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "outerAlpha",
+    )
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val maxR = minOf(cx, cy)
+
+            // Outermost ring
+            drawCircle(
+                color  = primaryColor,
+                radius = maxR * s3,
+                style  = Stroke(width = 1.5.dp.toPx()),
+                alpha  = outerAlpha,
+            )
+            // Middle ring
+            drawCircle(
+                color  = primaryColor,
+                radius = maxR * s2,
+                style  = Stroke(width = 2.dp.toPx()),
+                alpha  = outerAlpha + 0.15f,
+            )
+            // Inner ring
+            drawCircle(
+                color  = primaryColor,
+                radius = maxR * s1 * 0.72f,
+                style  = Stroke(width = 3.dp.toPx()),
+                alpha  = outerAlpha + 0.28f,
+            )
+            // Solid core disc
+            drawCircle(
+                color  = primaryColor,
+                radius = maxR * 0.34f,
+                alpha  = 0.12f,
+            )
+        }
+
+        // OM symbol — rendered as a Text so no asset is needed
+        Text(
+            text  = "ॐ",
+            fontSize  = 52.sp,
+            color     = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Now-playing info + loop counter
 // ---------------------------------------------------------------------------
 
 /**
- * Scrollable list of available mantras.
- * Uses radio-button semantics so accessibility services announce the selection state.
+ * Shows the selected mantra's name, description, playback status, and loop count.
+ * Uses [AnimatedContent] so title/description crossfade when the selection changes.
+ */
+@Composable
+private fun NowPlayingInfo(uiState: MantraUiState) {
+    AnimatedContent(
+        targetState = uiState.selected,
+        transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+        label = "nowPlaying",
+    ) { mantra ->
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text      = mantra?.title ?: "Select a mantra",
+                style     = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign  = TextAlign.Center,
+                color      = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text      = mantra?.description ?: "Choose from the list below to begin",
+                style     = MaterialTheme.typography.bodySmall,
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign  = TextAlign.Center,
+            )
+        }
+    }
+
+    Spacer(Modifier.height(6.dp))
+
+    // Status + loop counter row
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        val statusColor by animateColorAsState(
+            targetValue = if (uiState.isPlaying)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant,
+            label = "statusColor",
+        )
+        val statusText = when {
+            !uiState.isReady          -> "Connecting…"
+            uiState.isFadingOut       -> "Fading out…"
+            uiState.isPlaying         -> "▶  Playing  ∞"
+            uiState.selected != null  -> "⏸  Paused"
+            else                      -> "—"
+        }
+        Text(
+            text  = statusText,
+            style = MaterialTheme.typography.labelMedium,
+            color = statusColor,
+        )
+
+        if (uiState.loopCount > 0) {
+            Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text  = "Loop ${uiState.loopCount}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transport controls
+// ---------------------------------------------------------------------------
+
+/**
+ * Play/Pause and Stop buttons. Disabled until the controller is ready and a
+ * mantra is selected. The Stop button fades when the timer is fading out to
+ * give a visual hint that the session is ending automatically.
+ */
+@Composable
+private fun TransportControls(
+    uiState: MantraUiState,
+    onPlay:  () -> Unit,
+    onPause: () -> Unit,
+    onStop:  () -> Unit,
+) {
+    val enabled = uiState.isReady && uiState.selected != null
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        verticalAlignment     = Alignment.CenterVertically,
+        modifier              = Modifier.fillMaxWidth(),
+    ) {
+        // Stop
+        FilledTonalIconButton(
+            onClick  = onStop,
+            enabled  = enabled,
+            modifier = Modifier.size(52.dp),
+        ) {
+            Icon(Icons.Default.Stop, contentDescription = "Stop")
+        }
+
+        // Play / Pause — primary larger button
+        FilledIconButton(
+            onClick  = if (uiState.isPlaying) onPause else onPlay,
+            enabled  = enabled,
+            modifier = Modifier.size(72.dp),
+            colors   = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor   = MaterialTheme.colorScheme.onPrimary,
+            ),
+        ) {
+            Icon(
+                imageVector    = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                modifier       = Modifier.size(40.dp),
+            )
+        }
+
+        // Spacer to keep Play centred visually
+        Spacer(Modifier.size(52.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sleep timer
+// ---------------------------------------------------------------------------
+
+/**
+ * Sleep-timer controls shown below the transport buttons.
+ *
+ * When no timer is set: a [TextButton] showing "Sleep timer" opens a
+ * [DropdownMenu] to choose a duration.
+ *
+ * When a timer is running: a countdown label + [LinearProgressIndicator] are
+ * shown alongside a cancel icon. During fade-out the progress bar colour
+ * shifts to the error colour as a visual warning.
+ */
+@Composable
+private fun SleepTimerRow(
+    uiState: MantraUiState,
+    onSetTimer: (Int?) -> Unit,
+    onCancelTimer: () -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (uiState.timerRemainingSeconds != null) {
+            // ── Timer running ────────────────────────────────────────────
+            val totalSeconds = (uiState.timerMinutes ?: 1) * 60f
+            val progress = uiState.timerRemainingSeconds / totalSeconds
+
+            val progressColor by animateColorAsState(
+                targetValue = if (uiState.isFadingOut)
+                    MaterialTheme.colorScheme.error
+                else
+                    MaterialTheme.colorScheme.primary,
+                label = "progressColor",
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Timer,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text  = formatCountdown(uiState.timerRemainingSeconds),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilledTonalIconButton(
+                    onClick  = onCancelTimer,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.TimerOff,
+                        contentDescription = "Cancel timer",
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .height(3.dp),
+                color = progressColor,
+                trackColor = progressColor.copy(alpha = 0.2f),
+            )
+        } else {
+            // ── Timer picker ─────────────────────────────────────────────
+            Box {
+                TextButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        Icons.Outlined.Timer,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .alpha(0.6f),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Sleep timer",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    SleepTimerOptions.forEach { minutes ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (minutes == null) "No timer"
+                                    else "$minutes min",
+                                )
+                            },
+                            onClick = {
+                                onSetTimer(minutes)
+                                menuExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Formats [seconds] as `mm:ss` (or `h:mm:ss` for durations ≥ 1 hour). */
+private fun formatCountdown(seconds: Long): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+}
+
+// ---------------------------------------------------------------------------
+// Mantra list
+// ---------------------------------------------------------------------------
+
+/**
+ * Scrollable radio-button list of available mantras.
+ * Tapping a row calls [onSelect] which loads and plays that mantra.
  */
 @Composable
 private fun MantraList(
     mantras: List<Mantra>,
     selected: Mantra?,
     onSelect: (Mantra) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = modifier
+            .fillMaxWidth()
             .selectableGroup(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
             Text(
-                text = "Mantras",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp),
+                text     = "MANTRAS",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp, start = 4.dp),
             )
         }
         items(mantras, key = { it.id }) { mantra ->
             MantraRow(
-                mantra = mantra,
+                mantra     = mantra,
                 isSelected = mantra.id == selected?.id,
-                hasAudio = mantra.audioRes != null,
-                onClick = { onSelect(mantra) },
+                hasAudio   = mantra.audioRes != null,
+                onClick    = { onSelect(mantra) },
             )
         }
     }
@@ -229,8 +595,8 @@ private fun MantraList(
 /**
  * Single row in the mantra list.
  *
- * @param hasAudio When false, shows a "No audio" badge reminding the developer to
- *                 add the audio file to res/raw/. Remove this badge once files are added.
+ * The row uses [Role.RadioButton] so TalkBack reads "Om, radio button, selected / not selected".
+ * When [hasAudio] is false a small "Add audio" label is shown as a developer reminder.
  */
 @Composable
 private fun MantraRow(
@@ -239,44 +605,60 @@ private fun MantraRow(
     hasAudio: Boolean,
     onClick: () -> Unit,
 ) {
-    val containerColor = if (isSelected)
-        MaterialTheme.colorScheme.secondaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected)
+            MaterialTheme.colorScheme.primaryContainer
+        else
+            MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = tween(250),
+        label = "rowColor",
+    )
 
     Surface(
-        color = containerColor,
-        shape = MaterialTheme.shapes.medium,
+        color  = containerColor,
+        shape  = MaterialTheme.shapes.medium,
         modifier = Modifier
             .fillMaxWidth()
             .selectable(
                 selected = isSelected,
-                onClick = onClick,
-                role = Role.RadioButton,
+                onClick  = onClick,
+                role     = Role.RadioButton,
             ),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // onClick = null: click is handled by the parent selectable modifier
             RadioButton(selected = isSelected, onClick = null)
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = mantra.title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = mantra.description,
+                    text  = mantra.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                )
+                Text(
+                    text  = mantra.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            // Developer hint — remove once audio files are in res/raw/
+
+            // Developer hint — remove badge once audio files are in res/raw/
             if (!hasAudio) {
-                Text(
-                    text = "No audio",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                ) {
+                    Text(
+                        text     = "Add audio",
+                        style    = MaterialTheme.typography.labelSmall,
+                        color    = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
             }
         }
     }

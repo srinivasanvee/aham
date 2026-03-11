@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -13,42 +14,64 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.sri.aham.mantra.data.MantraRepository
 import com.sri.aham.mantra.model.Mantra
 import com.sri.aham.mantra.service.MantraPlayerService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+// ---------------------------------------------------------------------------
+// UI state
+// ---------------------------------------------------------------------------
 
 /**
- * UI state snapshot for the Mantra screen.
+ * Complete UI state for the Mantra / Meditation screen.
  *
- * @param mantras   Full list of available mantras from [MantraRepository].
- * @param selected  The currently loaded [Mantra]; null when nothing is chosen.
- * @param isPlaying True while audio is actively producing sound.
- * @param isReady   True once the [MediaController] handshake with [MantraPlayerService]
- *                  completes. Controls/transport buttons are disabled until ready.
+ * @param mantras                All available mantras from [MantraRepository].
+ * @param selected               Currently loaded mantra; null when none chosen.
+ * @param isPlaying              True while audio is actively producing sound.
+ * @param isReady                True once the [MediaController] handshake completes.
+ *                               Transport buttons are disabled until this is true.
+ * @param loopCount              How many full loops the current track has completed.
+ *                               Resets to 0 when a new mantra is selected.
+ * @param timerMinutes           The duration selected for the sleep timer (null = off).
+ * @param timerRemainingSeconds  Countdown value in seconds; null when timer is not running.
+ * @param isFadingOut            True during the ~3-second volume fade before auto-stop.
  */
 data class MantraUiState(
     val mantras: List<Mantra> = emptyList(),
     val selected: Mantra? = null,
     val isPlaying: Boolean = false,
     val isReady: Boolean = false,
+    val loopCount: Int = 0,
+    val timerMinutes: Int? = null,
+    val timerRemainingSeconds: Long? = null,
+    val isFadingOut: Boolean = false,
 )
 
+/** Available sleep-timer durations. null means "no timer". */
+val SleepTimerOptions = listOf(null, 5, 10, 15, 30, 60)
+
+// ---------------------------------------------------------------------------
+// ViewModel
+// ---------------------------------------------------------------------------
+
 /**
- * ViewModel for the Mantra screen.
+ * ViewModel for the Mantra / Meditation screen.
  *
- * Owns the connection to [MantraPlayerService] via a [MediaController] and keeps
- * [MantraUiState] in sync with real player events. Because all commands go through
- * the controller, audio continues playing even when the UI is fully destroyed.
+ * ## Responsibilities
+ * - Manages the [MediaController] connection to [MantraPlayerService].
+ * - Exposes [MantraUiState] as a [StateFlow] driven by real player events.
+ * - Implements the **sleep timer**: a coroutine countdown that fades volume to zero
+ *   and stops playback when the user-chosen duration elapses.
+ * - Tracks **loop count** by listening for position discontinuities caused by
+ *   [Player.REPEAT_MODE_ONE] restarting the track.
  *
- * ## Connection lifecycle
- * Call [connect] when the screen enters the composition and [disconnect] when it leaves.
- * A `DisposableEffect` in [MantraScreen][com.sri.aham.mantra.ui.MantraScreen] handles this.
- *
- * ## Using AndroidViewModel
- * [AndroidViewModel] is used instead of plain [androidx.lifecycle.ViewModel] because
- * building a [SessionToken] and [MediaController] requires an [Application] context that
- * outlives any individual Activity or Composable.
+ * ## Why AndroidViewModel?
+ * [SessionToken] and [MediaController] require an [Application] context that outlives
+ * any Activity or Composable. [AndroidViewModel] provides this safely.
  */
 class MantraViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -58,13 +81,16 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
 
+    /** Active sleep-timer coroutine job; cancelled when timer is cleared or reset. */
+    private var timerJob: Job? = null
+
     // -------------------------------------------------------------------------
     // Connection management
     // -------------------------------------------------------------------------
 
     /**
-     * Starts an async connection to [MantraPlayerService].
-     * Safe to call multiple times — subsequent calls are no-ops if already connected.
+     * Asynchronously connects to [MantraPlayerService].
+     * Safe to call repeatedly — no-op if already connected.
      */
     fun connect() {
         if (controller != null) return
@@ -76,7 +102,6 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
             {
                 controller = future.get()
                 controller?.addListener(playerListener)
-                // Reflect current player state in case the service was already active.
                 syncState()
             },
             ContextCompat.getMainExecutor(ctx),
@@ -84,8 +109,8 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Releases the [MediaController] connection.
-     * The service (and any active playback) is NOT stopped — it keeps running independently.
+     * Releases the [MediaController] but does NOT stop the service.
+     * Audio keeps playing after the UI navigates away.
      */
     fun disconnect() {
         controller?.removeListener(playerListener)
@@ -100,10 +125,11 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
     // -------------------------------------------------------------------------
 
     /**
-     * Loads [mantra] into the player and starts playback from the beginning.
+     * Loads [mantra] into the player and starts looped playback from the beginning.
+     * Resets [MantraUiState.loopCount] to 0.
      *
-     * If [Mantra.audioRes] is null the call is a no-op — add the audio file to
-     * `res/raw/` and set the resource ID in [MantraRepository] to enable playback.
+     * No-op if [Mantra.audioRes] is null — add the file to `res/raw/` and set the
+     * resource ID in [MantraRepository] to enable playback.
      */
     fun selectAndPlay(mantra: Mantra) {
         val audioRes = mantra.audioRes ?: return
@@ -113,21 +139,25 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
         ctrl.setMediaItem(MediaItem.fromUri(uri))
         ctrl.prepare()
         ctrl.play()
-        _uiState.update { it.copy(selected = mantra) }
+        _uiState.update { it.copy(selected = mantra, loopCount = 0) }
     }
 
-    /** Resumes playback after a [pause]. */
+    /** Resumes playback after [pause]. */
     fun play() {
         controller?.play()
     }
 
-    /** Pauses playback; position is preserved. */
+    /** Pauses playback; position and timer are preserved. */
     fun pause() {
         controller?.pause()
     }
 
-    /** Stops playback and rewinds to the start of the track. */
+    /**
+     * Stops playback, rewinds to the start, and cancels any active sleep timer.
+     */
     fun stop() {
+        cancelTimer()
+        restoreVolume()
         controller?.run {
             stop()
             seekTo(0)
@@ -136,26 +166,113 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     // -------------------------------------------------------------------------
+    // Sleep timer
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sets or clears the sleep timer.
+     *
+     * @param minutes Duration in minutes, or null to cancel an existing timer.
+     *
+     * When [minutes] is not null a coroutine countdown starts immediately.
+     * When the countdown reaches zero, [fadeOutAndStop] is called which gradually
+     * lowers the player volume to 0 before stopping.
+     */
+    fun setTimer(minutes: Int?) {
+        timerJob?.cancel()
+        timerJob = null
+        if (minutes == null) {
+            restoreVolume()
+            _uiState.update { it.copy(timerMinutes = null, timerRemainingSeconds = null, isFadingOut = false) }
+            return
+        }
+        val totalSeconds = minutes * 60L
+        _uiState.update { it.copy(timerMinutes = minutes, timerRemainingSeconds = totalSeconds) }
+        timerJob = viewModelScope.launch {
+            var remaining = totalSeconds
+            while (remaining > 0) {
+                delay(1_000)
+                remaining--
+                _uiState.update { it.copy(timerRemainingSeconds = remaining) }
+            }
+            fadeOutAndStop()
+        }
+    }
+
+    /**
+     * Cancels the active sleep timer without stopping playback.
+     * Volume is restored if a fade-out was in progress.
+     */
+    fun cancelTimer() {
+        timerJob?.cancel()
+        timerJob = null
+        restoreVolume()
+        _uiState.update { it.copy(timerMinutes = null, timerRemainingSeconds = null, isFadingOut = false) }
+    }
+
+    // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    /** Reads current player state and pushes it into [_uiState]. */
+    /**
+     * Fades the player volume from its current level to 0 over ~3 seconds
+     * (30 steps × 100 ms), then calls [stop].
+     *
+     * Called at the end of the sleep-timer countdown. After stop() the volume
+     * is immediately restored so the next session starts at full volume.
+     */
+    private suspend fun fadeOutAndStop() {
+        val ctrl = controller ?: return
+        _uiState.update { it.copy(isFadingOut = true) }
+        val steps = 30
+        repeat(steps) { step ->
+            ctrl.volume = 1f - (step + 1).toFloat() / steps
+            delay(100)
+        }
+        stop()
+        // stop() already calls cancelTimer() → isFadingOut reset there
+    }
+
+    /** Resets player volume to unity (1.0) after a fade-out or timer cancellation. */
+    private fun restoreVolume() {
+        controller?.volume = 1f
+    }
+
+    /** Reads live player state and pushes it into [_uiState]. */
     private fun syncState() {
         val ctrl = controller ?: return
         _uiState.update { it.copy(isPlaying = ctrl.isPlaying, isReady = true) }
     }
 
     /**
-     * Forwards player events to [_uiState] so the UI reacts to changes that originate
-     * from the notification controls or media hardware buttons.
+     * Player event listener — drives [MantraUiState] from real player events so
+     * that notification controls, Bluetooth buttons, and lock-screen actions are
+     * all reflected correctly in the UI.
      */
     private val playerListener = object : Player.Listener {
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _uiState.update { it.copy(isPlaying = isPlaying) }
+        }
+
+        /**
+         * Fired by [Player.REPEAT_MODE_ONE] every time the track restarts.
+         * [Player.DISCONTINUITY_REASON_AUTO_TRANSITION] covers both looping and
+         * playlist advancement — for a single-item repeat this is always a loop.
+         */
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                _uiState.update { it.copy(loopCount = it.loopCount + 1) }
+            }
         }
     }
 
     override fun onCleared() {
+        timerJob?.cancel()
         disconnect()
         super.onCleared()
     }

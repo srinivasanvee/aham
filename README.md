@@ -21,8 +21,19 @@ A personal Android app built with Jetpack Compose and Material Design 3. "Aham" 
 
 ## Features
 
-### Mantra / Meditation Player *(in progress)*
+### Mantra / Meditation Player ✅
 Play sacred mantras or ambient meditation audio on seamless loop. Supports background playback via a foreground service so the audio continues while the user navigates away or locks the screen.
+
+**Implemented (Phase 1 + 2):**
+- Looped playback via ExoPlayer `REPEAT_MODE_ONE` in a foreground `MediaSessionService`
+- Pulsing Om (ॐ) mandala animation — three concentric rings breathe with the chant
+- Live loop counter — increments every time the track restarts
+- Sleep timer — 5 / 10 / 15 / 30 / 60 min countdown with progress bar
+- Volume fade-out — 3-second gradual fade before auto-stop at timer expiry
+- Mantra selection list with animated row highlight
+- Cross-fade title animation when switching mantras
+- Persistent background notification with play/pause/stop controls (via Media3)
+- Notification permission handled at manifest level (API 33+)
 
 ---
 
@@ -58,7 +69,7 @@ Allow the user to select a mantra (or upload their own audio), press Play, and h
 
 ---
 
-### Phase 1 — Core Playback (MVP)
+### Phase 1 — Core Playback ✅ Done
 
 **Dependencies to add (`libs.versions.toml` + `build.gradle.kts`):**
 ```toml
@@ -160,13 +171,13 @@ data class MantraUiState(
 
 ---
 
-### Phase 2 — UX Enhancements
+### Phase 2 — UX Enhancements ✅ Done
 
-- **Breathing animation:** Animate a pulsing mandala or expanding circle in sync with the mantra tempo.
-- **Loop counter:** Show how many full loops have completed.
-- **Sleep timer:** Auto-pause after user-selected duration (5 / 10 / 15 / 30 / 60 min). Timer countdown shown in notification.
-- **Volume fade-out:** Gracefully fade volume when sleep timer expires.
-- **Persistent notification:** Media-style notification with mantra title, artwork, and transport controls.
+- ✅ **Breathing animation:** Three concentric rings pulse at 2 s / 2.5 s / 3 s offsets using `InfiniteTransition`. Freezes gracefully on pause.
+- ✅ **Loop counter:** `Player.Listener.onPositionDiscontinuity` increments the counter on every loop restart.
+- ✅ **Sleep timer:** Coroutine countdown (5 / 10 / 15 / 30 / 60 min) with `LinearProgressIndicator`.
+- ✅ **Volume fade-out:** 30-step × 100 ms coroutine lowers `MediaController.volume` to 0 before auto-stop.
+- ✅ **Persistent notification:** Managed automatically by `MediaSessionService` with play/pause/stop actions.
 
 ---
 
