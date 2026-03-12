@@ -1,0 +1,46 @@
+name: CI
+
+# Run on every PR targeting main or develop.
+# Validates that the code builds and tests pass before merging.
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test-and-build:
+    name: Test & Build (debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      # Unit tests run on the JVM — fast, no emulator needed.
+      - name: Run unit tests
+        run: ./gradlew test --stacktrace
+
+      # Build a debug APK to catch compile errors quickly.
+      # The release AAB (signed) is only built in the deploy workflow.
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      # Upload the test report so failures are easy to read in the Actions UI.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: app/build/reports/tests/
+          retention-days: 7

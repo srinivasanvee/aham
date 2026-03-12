@@ -1,0 +1,7 @@
+# The package name of the app — must match applicationId in build.gradle.kts
+package_name("com.sri.aham")
+
+# Path to the Google Play service-account JSON key.
+# In CI this is written to a temp file and the path is set via PLAY_STORE_JSON_KEY_PATH.
+# Locally, point it to your downloaded key file (keep it out of version control).
+json_key_file(ENV["PLAY_STORE_JSON_KEY_PATH"])

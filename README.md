@@ -201,9 +201,110 @@ data class MantraUiState(
 
 ---
 
+## CI / CD Pipeline
+
+### Branching strategy
+```
+develop  ──►  PR  ──►  main  ──►  git tag v1.x.x  ──►  Play Store (internal track)
+```
+- All development happens on `develop` (or feature branches off it).
+- A PR from `develop` → `main` triggers the **CI** workflow (tests + debug build).
+- Merging does **not** auto-deploy — you control exactly when a release goes out.
+- Pushing a version tag triggers the **Deploy** workflow.
+- Promote to production manually from Play Console (or run `fastlane promote`).
+
+### GitHub Actions workflows
+
+| Workflow | File | Trigger | What it does |
+|---|---|---|---|
+| CI | `.github/workflows/ci.yml` | PR → `main` or `develop` | Unit tests + debug build |
+| Deploy | `.github/workflows/deploy.yml` | `git push origin v*` (any version tag) | Signed AAB → internal track |
+
+### One-time setup (do this before the first push to main)
+
+**1. Create a release keystore**
+```bash
+keytool -genkey -v \
+  -keystore ~/keys/aham-release.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias aham-key
+```
+Store it outside the repo — it must never be committed.
+
+**2. Configure local signing**
+```bash
+cp keystore.properties.template keystore.properties
+# Edit keystore.properties with your keystore path and passwords
+```
+
+**3. Create a Play Store service-account key**
+- Play Console → Setup → API access → Link to a Google Cloud project
+- Create a service account with **Release Manager** role
+- Download the JSON key → save as `play-store-key.json` (gitignored)
+
+**4. Add GitHub Secrets**
+Go to: GitHub repo → Settings → Secrets and variables → Actions
+
+```bash
+# Encode and copy secrets to clipboard (macOS)
+base64 -i ~/keys/aham-release.jks | pbcopy   # → KEYSTORE_BASE64
+base64 -i play-store-key.json | pbcopy        # → PLAY_STORE_JSON_KEY_BASE64
+```
+
+| Secret | Value |
+|---|---|
+| `KEYSTORE_BASE64` | Base64-encoded `.jks` file |
+| `KEYSTORE_PASSWORD` | Keystore store password |
+| `KEY_ALIAS` | Key alias (`aham-key`) |
+| `KEY_PASSWORD` | Key password |
+| `PLAY_STORE_JSON_KEY_BASE64` | Base64-encoded service-account JSON |
+
+**5. Install Fastlane locally** (optional, for running lanes from terminal)
+```bash
+gem install bundler
+bundle install            # installs fastlane from Gemfile
+bundle exec fastlane deploy  # test a local deploy
+```
+
+### Daily workflow
+```bash
+# Work on develop
+git checkout develop
+# ... make changes ...
+git push origin develop
+
+# Open PR → main in GitHub UI (CI runs automatically, must pass to merge)
+# Merge PR when ready
+
+# When you want to release — tag main and push
+git checkout main
+git pull
+git tag v1.2.0
+git push origin v1.2.0
+# ↑ This alone triggers the deploy workflow → AAB lands in internal track
+
+# When ready to ship to all users
+bundle exec fastlane promote        # internal → production
+# or use Play Console UI to roll out gradually
+```
+
+### versionCode and versionName
+| Variable | Source | Example |
+|---|---|---|
+| `versionCode` | `GITHUB_RUN_NUMBER` (auto-increments, never touch manually) | `42` |
+| `versionName` | Git tag with `v` prefix stripped | `v1.2.0` → `"1.2.0"` |
+
+The AAB artifact uploaded to GitHub Actions is named `release-aab-1.2.0` for traceability.
+
+---
+
 ## Getting Started
 
-1. Clone the repo
+1. Clone the repo and switch to `develop`
+   ```bash
+   git checkout -b develop
+   git push -u origin develop
+   ```
 2. Open in Android Studio Ladybug (2024.2+)
 3. Sync Gradle
 4. Run on a device/emulator with API 33+

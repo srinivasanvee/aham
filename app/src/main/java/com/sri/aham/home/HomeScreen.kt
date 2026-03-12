@@ -122,7 +122,7 @@ private fun WelcomeBanner() {
     ) {
         Column {
             Text(
-                text       = "अहम् ब्रह्मास्मि - நான் யார்",
+                text       = "अहम् ब्रह्मास्मि - அகம்",
                 style      = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color      = MaterialTheme.colorScheme.onPrimaryContainer,

@@ -22,9 +22,19 @@ local.properties
 .idea/navEditor.xml
 .idea/assetWizardSettings.xml
 
-# Keystore files
+# Keystore files — NEVER commit these
 *.jks
 *.keystore
+keystore.properties
+
+# Play Store service-account key — NEVER commit
+play-store-key.json
+
+# Fastlane generated files
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
 
 # Google Services
 google-services.json

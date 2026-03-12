@@ -1,0 +1,91 @@
+# Fastlane configuration for the Aham Android app.
+#
+# Available lanes:
+#   bundle exec fastlane test          — run unit tests
+#   bundle exec fastlane build_release — build release AAB (no upload)
+#   bundle exec fastlane deploy        — build + upload to Play Store internal track
+#   bundle exec fastlane promote       — promote internal → production (manual gate)
+#
+# Required environment variables for signing (set in GitHub Secrets or locally):
+#   KEYSTORE_PATH        — absolute path to the .jks keystore file
+#   KEYSTORE_PASSWORD    — keystore store password
+#   KEY_ALIAS            — signing key alias
+#   KEY_PASSWORD         — signing key password
+#   PLAY_STORE_JSON_KEY_PATH — absolute path to the Play Store service-account JSON
+#   VERSION_CODE         — integer build number (set to GITHUB_RUN_NUMBER in CI)
+#   VERSION_NAME         — semver string derived from the git tag (e.g. "1.2.3")
+
+default_platform(:android)
+
+platform :android do
+
+  # ---------------------------------------------------------------------------
+  # test — run unit tests only (used in CI PR checks)
+  # ---------------------------------------------------------------------------
+  desc "Run unit tests"
+  lane :test do
+    gradle(task: "test")
+  end
+
+  # ---------------------------------------------------------------------------
+  # build_release — compile and sign release AAB, no upload
+  # Useful for local validation before submitting.
+  # ---------------------------------------------------------------------------
+  desc "Build a signed release AAB without uploading"
+  lane :build_release do
+    gradle(task: "bundle", build_type: "Release")
+    UI.success "AAB ready at app/build/outputs/bundle/release/app-release.aab"
+  end
+
+  # ---------------------------------------------------------------------------
+  # deploy — build + upload to Play Store internal test track
+  # Triggered by pushing a version tag: git tag v1.2.0 && git push origin v1.2.0
+  # ---------------------------------------------------------------------------
+  desc "Build and deploy to Play Store internal track"
+  lane :deploy do
+    # Build signed release bundle.
+    # Signing credentials are read from env vars inside app/build.gradle.kts.
+    gradle(task: "bundle", build_type: "Release")
+
+    # Upload to the internal track so you can test before rolling out wider.
+    # Use skip_upload_* to avoid needing store listing assets on every push.
+    upload_to_play_store(
+      track:                   "internal",
+      aab:                     "app/build/outputs/bundle/release/app-release.aab",
+      json_key:                ENV["PLAY_STORE_JSON_KEY_PATH"],
+      skip_upload_metadata:    true,
+      skip_upload_images:      true,
+      skip_upload_screenshots: true,
+      release_status:          "draft",
+    )
+
+    UI.success "Uploaded to internal track. Open Play Console to roll out."
+  end
+
+  # ---------------------------------------------------------------------------
+  # promote — move a build from one track to another (manual step)
+  #
+  # Examples:
+  #   bundle exec fastlane promote                 # internal → production
+  #   bundle exec fastlane promote from:internal to:beta
+  # ---------------------------------------------------------------------------
+  desc "Promote a build between Play Store tracks"
+  lane :promote do |options|
+    from_track = options[:from] || "internal"
+    to_track   = options[:to]   || "production"
+
+    upload_to_play_store(
+      track:                   from_track,
+      track_promote_to:        to_track,
+      json_key:                ENV["PLAY_STORE_JSON_KEY_PATH"],
+      skip_upload_apk:         true,
+      skip_upload_aab:         true,
+      skip_upload_metadata:    true,
+      skip_upload_images:      true,
+      skip_upload_screenshots: true,
+    )
+
+    UI.success "Promoted from '#{from_track}' to '#{to_track}'."
+  end
+
+end

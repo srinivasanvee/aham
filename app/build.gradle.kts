@@ -1,3 +1,18 @@
+import java.util.Properties
+
+// ---------------------------------------------------------------------------
+// Keystore — local development
+// ---------------------------------------------------------------------------
+// Copy keystore.properties.template → keystore.properties (in project root,
+// gitignored) and fill in your values for local release builds.
+// In CI, signing credentials come from environment variables set in the
+// GitHub Actions deploy workflow.
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) load(keystorePropertiesFile.inputStream())
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -15,25 +30,53 @@ android {
         applicationId = "com.sri.aham"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+
+        // In CI, VERSION_CODE = GITHUB_RUN_NUMBER (auto-increments every deploy).
+        // Locally defaults to 1 so the project always compiles without setup.
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("VERSION_NAME") ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // ---------------------------------------------------------------------------
+    // Signing
+    // ---------------------------------------------------------------------------
+    // Priority: keystore.properties (local) → environment variables (CI)
+    signingConfigs {
+        create("release") {
+            val storePath = keystoreProperties.getProperty("storeFile")
+                ?: System.getenv("KEYSTORE_PATH")
+
+            if (storePath != null) {
+                storeFile     = file(storePath)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                    ?: System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias      = keystoreProperties.getProperty("keyAlias")
+                    ?: System.getenv("KEY_ALIAS") ?: ""
+                keyPassword   = keystoreProperties.getProperty("keyPassword")
+                    ?: System.getenv("KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     buildFeatures {
         compose = true
     }
