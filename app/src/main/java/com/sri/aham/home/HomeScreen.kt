@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SelfImprovement
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,15 +52,20 @@ import com.sri.aham.navigation.Route
 fun HomeScreen(onNavigate: (String) -> Unit) {
     val features = listOf(
         FeatureCard(
-            title       = "Mantra Player",
-            description = "Loop sacred mantras & meditation audio",
+            title       = "Mantra Meditation",
+            description = "Loop sacred mantras and meditation",
             icon        = Icons.Outlined.SelfImprovement,
             route       = Route.MANTRA,
+        ),
+        FeatureCard(
+            title       = "Pomodoro",
+            description = "Focus timer with break reminders",
+            icon        = Icons.Outlined.Timer,
+            route       = Route.POMODORO,
         ),
         // Uncomment as features are implemented:
         // FeatureCard("Journal",      "Daily gratitude & reflection",     Icons.Outlined.EditNote,     Route.JOURNAL),
         // FeatureCard("Breath Timer", "Guided box breathing & 4-7-8",    Icons.Outlined.Air,          Route.BREATH_TIMER),
-        // FeatureCard("Pomodoro",     "Focus timer with break reminders", Icons.Outlined.Timer,        Route.POMODORO),
         // FeatureCard("Affirmations", "Positive daily affirmations",      Icons.Outlined.AutoAwesome,  Route.AFFIRMATIONS),
     )
 

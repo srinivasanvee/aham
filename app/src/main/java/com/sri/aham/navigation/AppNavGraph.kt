@@ -6,6 +6,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.sri.aham.home.HomeScreen
 import com.sri.aham.mantra.ui.MantraScreen
+import com.sri.aham.pomodoro.ui.PomodoroScreen
 
 /**
  * Top-level navigation route identifiers.
@@ -13,8 +14,9 @@ import com.sri.aham.mantra.ui.MantraScreen
  */
 object Route {
     const val HOME   = "home"
-    const val MANTRA = "mantra"
-    // Add future routes here (e.g. JOURNAL, BREATH_TIMER, POMODORO).
+    const val MANTRA   = "mantra"
+    const val POMODORO = "pomodoro"
+    // Add future routes here (e.g. JOURNAL, BREATH_TIMER).
 }
 
 /**
@@ -42,6 +44,9 @@ fun AppNavGraph() {
         }
         composable(Route.MANTRA) {
             MantraScreen()
+        }
+        composable(Route.POMODORO) {
+            PomodoroScreen()
         }
     }
 }
