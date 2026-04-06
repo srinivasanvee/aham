@@ -1,21 +1,33 @@
 # Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve line numbers for crash stack traces.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ---------------------------------------------------------------------------
+# MediaPipe Tasks — GenAI / LlmInference
+# R8 would otherwise strip the JNI bridge and task runner internals.
+# ---------------------------------------------------------------------------
+-keep class com.google.mediapipe.** { *; }
+-keep class com.google.mediapipe.tasks.genai.** { *; }
+-dontwarn com.google.mediapipe.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# ---------------------------------------------------------------------------
+# LiteRT / TensorFlow Lite (used internally by MediaPipe)
+# ---------------------------------------------------------------------------
+-keep class org.tensorflow.** { *; }
+-keep class com.google.android.odml.** { *; }
+-dontwarn org.tensorflow.**
+
+# ---------------------------------------------------------------------------
+# Native JNI — keep all methods called from native code
+# ---------------------------------------------------------------------------
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# ---------------------------------------------------------------------------
+# Media3 / ExoPlayer — keep internal service and session classes
+# ---------------------------------------------------------------------------
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
