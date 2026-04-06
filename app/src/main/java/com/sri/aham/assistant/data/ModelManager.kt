@@ -6,22 +6,19 @@ import java.io.File
 object ModelManager {
 
     /**
-     * Direct download URL for the Gemma 4 model (.litertlm format).
+     * Official Google-packaged Gemma 3 1B model in .litertlm format.
+     * This is the correct format for MediaPipe LlmInference — it includes
+     * the SentencePiece tokenizer embedded in the file (~700 MB).
      *
-     * How to obtain:
-     *  1. Visit kaggle.com/models/google/gemma — sign in (free) and accept the license.
-     *  2. Filter framework → "LiteRT", pick "gemma4-1b-it-int4" (smallest, ~600 MB).
-     *  3. Download the .litertlm file.
-     *  4. Host it somewhere with a direct link (GitHub Release asset, GCS bucket, etc.)
-     *     and paste the URL below.
-     *
-     * Dev shortcut (no hosting needed):
-     *   adb push gemma4-1b-it-int4.litertlm /data/data/com.sri.aham/files/models/
+     * Source: https://huggingface.co/google/gemma-3-1b-it-litert-lm
+     * Note: Requires accepting Google's Gemma terms of service on HuggingFace.
+     * If the download is gated, push the model manually:
+     *   adb push gemma3-1b-it-int4.litertlm /data/data/com.sri.aham/files/models/
      */
     const val MODEL_DOWNLOAD_URL: String =
-        "https://huggingface.co/huggingworld/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm?download=true"
+        "https://huggingface.co/google/gemma-3-1b-it-litert-lm/resolve/main/gemma3-1b-it-int4.litertlm?download=true"
 
-    const val MODEL_FILENAME = "gemma-4-E4B-it.litertlm"
+    const val MODEL_FILENAME = "gemma3-1b-it-int4.litertlm"
 
     fun modelFile(context: Context): File =
         File(context.filesDir, "models/$MODEL_FILENAME")

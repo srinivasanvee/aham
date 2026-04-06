@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.sri.aham.assistant.data.GemmaInferenceEngine
 import com.sri.aham.assistant.data.InferenceEngine
 import com.sri.aham.assistant.data.MockInferenceEngine
+import com.sri.aham.assistant.data.OllamaInferenceEngine
 import com.sri.aham.assistant.data.ModelManager
 import com.sri.aham.assistant.model.ChatMessage
 import com.sri.aham.assistant.model.MessageRole
@@ -20,6 +21,9 @@ import kotlinx.coroutines.launch
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+
+/** Set to true to use Ollama (via adb reverse) instead of MockInferenceEngine on emulator. */
+private const val USE_OLLAMA_ON_EMULATOR = true
 
 private fun isEmulator(): Boolean =
     Build.FINGERPRINT.startsWith("generic") ||
@@ -45,8 +49,11 @@ data class AssistantUiState(
 
 class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val engine: InferenceEngine =
-        if (isEmulator()) MockInferenceEngine() else GemmaInferenceEngine(app)
+    private val engine: InferenceEngine = when {
+        !isEmulator()          -> GemmaInferenceEngine(app)
+        USE_OLLAMA_ON_EMULATOR -> OllamaInferenceEngine()
+        else                   -> MockInferenceEngine()
+    }
     private val _uiState = MutableStateFlow(AssistantUiState())
     val uiState: StateFlow<AssistantUiState> = _uiState.asStateFlow()
 
