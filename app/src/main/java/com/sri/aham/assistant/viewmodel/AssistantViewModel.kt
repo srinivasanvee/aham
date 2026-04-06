@@ -137,6 +137,29 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     redirects++
                 }
 
+                // Validate response — gated HuggingFace models return 401/403 with HTML body
+                val responseCode = connection.responseCode
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    connection.disconnect()
+                    val hint = when (responseCode) {
+                        401, 403 -> "The model is gated. Accept the Gemma license on huggingface.co/google/gemma-3-1b-it-litert-lm, then retry. " +
+                            "Or push the file manually: adb push gemma3-1b-it-int4.litertlm /data/data/com.sri.aham/files/models/"
+                        404 -> "Model file not found at the download URL."
+                        else -> "Server returned HTTP $responseCode."
+                    }
+                    throw IOException(hint)
+                }
+
+                // Reject HTML responses (auth redirect masquerading as 200)
+                val contentType = connection.contentType ?: ""
+                if (contentType.startsWith("text/")) {
+                    connection.disconnect()
+                    throw IOException(
+                        "Download returned HTML instead of a model file — the model may be gated. " +
+                        "Accept the Gemma license on huggingface.co then retry, or push the file via adb."
+                    )
+                }
+
                 val total = connection.contentLengthLong
                 var downloaded = 0L
                 var lastReportedProgress = -1
@@ -170,8 +193,13 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 loadModel()
             } catch (e: Exception) {
+                // Delete partial/corrupt file so next attempt starts fresh
+                ModelManager.modelFile(getApplication()).delete()
                 _uiState.update {
-                    it.copy(modelState = ModelState.ERROR, errorMessage = "Download failed: ${e.message}")
+                    it.copy(
+                        modelState = ModelState.NOT_READY,
+                        errorMessage = "Download failed: ${e.message}",
+                    )
                 }
             }
         }
