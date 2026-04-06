@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SelfImprovement
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +63,12 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             description = "Focus timer with break reminders",
             icon        = Icons.Outlined.Timer,
             route       = Route.POMODORO,
+        ),
+        FeatureCard(
+            title       = "Assistant",
+            description = "Offline AI companion powered by Gemma 4",
+            icon        = Icons.Outlined.SmartToy,
+            route       = Route.ASSISTANT,
         ),
         // Uncomment as features are implemented:
         // FeatureCard("Journal",      "Daily gratitude & reflection",     Icons.Outlined.EditNote,     Route.JOURNAL),

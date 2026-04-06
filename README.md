@@ -198,6 +198,7 @@ data class MantraUiState(
 | Breath Timer | Guided box breathing / 4-7-8 patterns |
 | Pomodoro | Focus timer with break reminders |
 | Quotes | Sacred text / motivational quote of the day |
+| **AI Assistant** | **Offline Gemma 4 voice assistant — see [ASSISTANT.md](ASSISTANT.md)** |
 
 ---
 
