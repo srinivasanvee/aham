@@ -5,16 +5,12 @@
 -renamesourcefileattribute SourceFile
 
 # ---------------------------------------------------------------------------
-# MediaPipe Tasks — GenAI / LlmInference
-# R8 would otherwise strip the JNI bridge and task runner internals.
+# LiteRT-LM — on-device LLM inference
 # ---------------------------------------------------------------------------
--keep class com.google.mediapipe.** { *; }
--keep class com.google.mediapipe.tasks.genai.** { *; }
--dontwarn com.google.mediapipe.**
+-keep class com.google.ai.edge.litertlm.** { *; }
+-dontwarn com.google.ai.edge.litertlm.**
 
-# ---------------------------------------------------------------------------
-# LiteRT / TensorFlow Lite (used internally by MediaPipe)
-# ---------------------------------------------------------------------------
+# LiteRT flatbuffer / TFLite internals used by LiteRT-LM
 -keep class org.tensorflow.** { *; }
 -keep class com.google.android.odml.** { *; }
 -dontwarn org.tensorflow.**

@@ -101,7 +101,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
-    implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.litertlm.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -52,6 +52,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sri.aham.mantra.model.Mantra
+import com.sri.aham.mantra.model.MantraCategory
 import com.sri.aham.mantra.viewmodel.MantraUiState
 import com.sri.aham.mantra.viewmodel.MantraViewModel
 import com.sri.aham.mantra.viewmodel.SleepTimerOptions
@@ -122,6 +125,12 @@ fun MantraScreen(viewModel: MantraViewModel = viewModel()) {
                 .padding(padding)
                 .fillMaxSize(),
         ) {
+            // ── Tab row ───────────────────────────────────────────────────
+            MantraTabRow(
+                selectedTab = uiState.selectedTab,
+                onTabSelected = viewModel::setTab,
+            )
+
             // ── Hero section ──────────────────────────────────────────────
             HeroSection(
                 uiState = uiState,
@@ -135,12 +144,40 @@ fun MantraScreen(viewModel: MantraViewModel = viewModel()) {
 
             HorizontalDivider()
 
-            // ── Mantra list ───────────────────────────────────────────────
+            // ── Track list ────────────────────────────────────────────────
             MantraList(
                 mantras  = uiState.mantras,
                 selected = uiState.selected,
                 onSelect = viewModel::selectAndPlay,
                 modifier = Modifier.weight(0.42f),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tab row
+// ---------------------------------------------------------------------------
+
+private val tabs = listOf(MantraCategory.MANTRA, MantraCategory.GUIDED, MantraCategory.SLOKHA)
+
+private fun MantraCategory.label() = when (this) {
+    MantraCategory.MANTRA  -> "Mantra"
+    MantraCategory.GUIDED  -> "Guided"
+    MantraCategory.SLOKHA  -> "Slokha"
+}
+
+@Composable
+private fun MantraTabRow(
+    selectedTab: MantraCategory,
+    onTabSelected: (MantraCategory) -> Unit,
+) {
+    TabRow(selectedTabIndex = tabs.indexOf(selectedTab)) {
+        tabs.forEach { category ->
+            Tab(
+                selected = selectedTab == category,
+                onClick  = { onTabSelected(category) },
+                text     = { Text(category.label()) },
             )
         }
     }
@@ -566,6 +603,20 @@ private fun MantraList(
     onSelect: (Mantra) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (mantras.isEmpty()) {
+        Box(
+            modifier = modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text  = "Coming soon",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
@@ -573,14 +624,6 @@ private fun MantraList(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item {
-            Text(
-                text     = "MANTRAS",
-                style    = MaterialTheme.typography.labelSmall,
-                color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp, start = 4.dp),
-            )
-        }
         items(mantras, key = { it.id }) { mantra ->
             MantraRow(
                 mantra     = mantra,

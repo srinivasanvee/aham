@@ -14,8 +14,8 @@ class MockInferenceEngine : InferenceEngine {
         delay(800) // simulate model load time
     }
 
-    override fun generate(prompt: String): Flow<String> = flow {
-        val response = pickResponse(prompt)
+    override fun generate(userMessage: String): Flow<String> = flow {
+        val response = pickResponse(userMessage)
         for (word in response.split(" ")) {
             emit("$word ")
             delay(60)
@@ -24,8 +24,8 @@ class MockInferenceEngine : InferenceEngine {
 
     override fun close() = Unit
 
-    private fun pickResponse(prompt: String): String {
-        val lower = prompt.lowercase()
+    private fun pickResponse(userMessage: String): String {
+        val lower = userMessage.lowercase()
         return when {
             lower.contains("mantra") || lower.contains("meditation") ->
                 "The Gayatri mantra is a beautiful choice for morning practice. " +

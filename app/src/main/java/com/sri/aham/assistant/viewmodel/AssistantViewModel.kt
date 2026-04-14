@@ -71,9 +71,6 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         if (text.isEmpty() || _uiState.value.isGenerating) return
         if (_uiState.value.modelState != ModelState.READY) return
 
-        // Snapshot history before the new exchange so the prompt is consistent
-        val historySnapshot = _uiState.value.messages
-
         val userMsg = ChatMessage(role = MessageRole.USER, text = text)
         val placeholder = ChatMessage(role = MessageRole.ASSISTANT, text = "", isStreaming = true)
 
@@ -86,10 +83,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         viewModelScope.launch {
-            val prompt = buildPrompt(historySnapshot, text)
             var accumulated = ""
 
-            engine.generate(prompt)
+            engine.generate(text)
                 .catch { e ->
                     updateLastMessage("Sorry, something went wrong: ${e.message}", streaming = false)
                     _uiState.update { it.copy(isGenerating = false) }
@@ -259,22 +255,3 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Prompt building
-// ---------------------------------------------------------------------------
-
-private const val SYSTEM_PROMPT = """You are Aham, a warm and mindful AI companion inside a personal wellness app.
-The app features: a Mantra/Meditation player for looping sacred mantras, and a Pomodoro focus timer.
-Keep responses concise, grounded, and supportive. Avoid bullet lists unless specifically asked.
-When the user asks to play a mantra or start a timer, acknowledge it naturally and let them know you've noted it."""
-
-fun buildPrompt(history: List<ChatMessage>, userMessage: String): String = buildString {
-    append("<bos>")
-    append("<start_of_turn>system\n$SYSTEM_PROMPT\n<end_of_turn>\n")
-    history.takeLast(10).forEach { msg ->
-        val role = if (msg.role == MessageRole.USER) "user" else "model"
-        append("<start_of_turn>$role\n${msg.text}\n<end_of_turn>\n")
-    }
-    append("<start_of_turn>user\n$userMessage\n<end_of_turn>\n")
-    append("<start_of_turn>model\n")
-}

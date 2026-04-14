@@ -13,6 +13,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.sri.aham.mantra.data.MantraRepository
 import com.sri.aham.mantra.model.Mantra
+import com.sri.aham.mantra.model.MantraCategory
 import com.sri.aham.mantra.service.MantraPlayerService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,7 +42,8 @@ import kotlinx.coroutines.launch
  * @param isFadingOut            True during the ~3-second volume fade before auto-stop.
  */
 data class MantraUiState(
-    val mantras: List<Mantra> = emptyList(),
+    val allMantras: List<Mantra> = emptyList(),
+    val selectedTab: MantraCategory = MantraCategory.GUIDED,
     val selected: Mantra? = null,
     val isPlaying: Boolean = false,
     val isReady: Boolean = false,
@@ -49,7 +51,9 @@ data class MantraUiState(
     val timerMinutes: Int? = null,
     val timerRemainingSeconds: Long? = null,
     val isFadingOut: Boolean = false,
-)
+) {
+    val mantras: List<Mantra> get() = allMantras.filter { it.category == selectedTab }
+}
 
 /** Available sleep-timer durations. null means "no timer". */
 val SleepTimerOptions = listOf(null, 5, 10, 15, 30, 60)
@@ -75,7 +79,7 @@ val SleepTimerOptions = listOf(null, 5, 10, 15, 30, 60)
  */
 class MantraViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(MantraUiState(mantras = MantraRepository.getAll()))
+    private val _uiState = MutableStateFlow(MantraUiState(allMantras = MantraRepository.getAll()))
     val uiState: StateFlow<MantraUiState> = _uiState.asStateFlow()
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -208,6 +212,27 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
         timerJob = null
         restoreVolume()
         _uiState.update { it.copy(timerMinutes = null, timerRemainingSeconds = null, isFadingOut = false) }
+    }
+
+    // -------------------------------------------------------------------------
+    // Tab selection
+    // -------------------------------------------------------------------------
+
+    /** Switches the active tab and stops playback if the selected track is in a different category. */
+    fun setTab(category: MantraCategory) {
+        _uiState.update { state ->
+            val stopNeeded = state.selected != null && state.selected.category != category
+            if (stopNeeded) {
+                cancelTimer()
+                restoreVolume()
+                controller?.stop()
+            }
+            state.copy(
+                selectedTab = category,
+                selected = if (stopNeeded) null else state.selected,
+                isPlaying = if (stopNeeded) false else state.isPlaying,
+            )
+        }
     }
 
     // -------------------------------------------------------------------------
