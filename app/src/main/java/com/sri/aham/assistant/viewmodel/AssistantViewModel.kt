@@ -139,8 +139,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 if (responseCode != HttpURLConnection.HTTP_OK) {
                     connection.disconnect()
                     val hint = when (responseCode) {
-                        401, 403 -> "The model is gated. Accept the Gemma license on huggingface.co/google/gemma-3-1b-it-litert-lm, then retry. " +
-                            "Or push the file manually: adb push gemma3-1b-it-int4.litertlm /data/data/com.sri.aham/files/models/"
+                        401, 403 -> "Model access denied. The model may be gated — check HuggingFace for license requirements. " +
+                            "Or push the file manually: adb push Qwen3-0.6B.litertlm /data/data/com.sri.aham/files/models/"
                         404 -> "Model file not found at the download URL."
                         else -> "Server returned HTTP $responseCode."
                     }

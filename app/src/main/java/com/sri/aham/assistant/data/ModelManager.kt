@@ -6,16 +6,19 @@ import java.io.File
 object ModelManager {
 
     /**
-     * Gemma 4 E2B (2B parameters) from the official litert-community HuggingFace org.
-     * Publicly accessible — no authentication or license token required.
-     * Uses the LiteRT-LM format (.litertlm) with tokenizer embedded (~2.6 GB).
+     * Qwen3-0.6B from litert-community HuggingFace org.
+     * Publicly accessible — no authentication required.
+     * Compatible with litertlm-android:0.10.0 (~0.8 GB download).
      *
-     * Source: https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm
+     * NOTE: Switch to Gemma 4 once litertlm-android:0.10.1 lands on Google Maven —
+     * Gemma 4 models require the new engine in 0.10.1+ (current: 0.10.0).
+     *
+     * Source: https://huggingface.co/litert-community/Qwen3-0.6B
      */
     const val MODEL_DOWNLOAD_URL: String =
-        "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true"
+        "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B.litertlm?download=true"
 
-    const val MODEL_FILENAME = "gemma-4-E2B-it.litertlm"
+    const val MODEL_FILENAME = "Qwen3-0.6B.litertlm"
 
     fun modelFile(context: Context): File =
         File(context.filesDir, "models/$MODEL_FILENAME")
