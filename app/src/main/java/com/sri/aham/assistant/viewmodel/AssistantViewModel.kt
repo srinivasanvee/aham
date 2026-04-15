@@ -24,7 +24,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** Set to true to use Ollama (via adb reverse) instead of MockInferenceEngine on emulator. */
-private const val USE_OLLAMA_ON_EMULATOR = true
+private const val USE_OLLAMA_ON_EMULATOR = false
 
 private fun isEmulator(): Boolean =
     Build.FINGERPRINT.startsWith("generic") ||
@@ -140,7 +140,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     connection.disconnect()
                     val hint = when (responseCode) {
                         401, 403 -> "Model access denied. The model may be gated — check HuggingFace for license requirements. " +
-                            "Or push the file manually: adb push Qwen3-0.6B.litertlm /data/data/com.sri.aham/files/models/"
+                            "Or push the file manually: adb push gemma3-1b-it-int4.litertlm /data/data/com.sri.aham/files/models/"
                         404 -> "Model file not found at the download URL."
                         else -> "Server returned HTTP $responseCode."
                     }
