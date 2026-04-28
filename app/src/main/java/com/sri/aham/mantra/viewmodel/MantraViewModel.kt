@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -51,6 +52,8 @@ data class MantraUiState(
     val timerMinutes: Int? = null,
     val timerRemainingSeconds: Long? = null,
     val isFadingOut: Boolean = false,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
 ) {
     val mantras: List<Mantra> get() = allMantras.filter { it.category == selectedTab }
 }
@@ -87,6 +90,9 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Active sleep-timer coroutine job; cancelled when timer is cleared or reset. */
     private var timerJob: Job? = null
+
+    /** Polls [MediaController.currentPosition] every 200 ms while playing. */
+    private var positionPollingJob: Job? = null
 
     // -------------------------------------------------------------------------
     // Connection management
@@ -143,7 +149,7 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
         ctrl.setMediaItem(MediaItem.fromUri(uri))
         ctrl.prepare()
         ctrl.play()
-        _uiState.update { it.copy(selected = mantra, loopCount = 0) }
+        _uiState.update { it.copy(selected = mantra, loopCount = 0, positionMs = 0L, durationMs = 0L) }
     }
 
     /** Resumes playback after [pause]. */
@@ -161,12 +167,19 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun stop() {
         cancelTimer()
+        stopPositionPolling()
         restoreVolume()
         controller?.run {
             stop()
             seekTo(0)
         }
-        _uiState.update { it.copy(isPlaying = false) }
+        _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
+    }
+
+    /** Seeks to [positionMs] and immediately reflects the new position in state. */
+    fun seekTo(positionMs: Long) {
+        controller?.seekTo(positionMs)
+        _uiState.update { it.copy(positionMs = positionMs) }
     }
 
     // -------------------------------------------------------------------------
@@ -239,6 +252,22 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
     // Internal helpers
     // -------------------------------------------------------------------------
 
+    private fun startPositionPolling() {
+        positionPollingJob?.cancel()
+        positionPollingJob = viewModelScope.launch {
+            while (true) {
+                val pos = controller?.currentPosition ?: 0L
+                _uiState.update { it.copy(positionMs = pos) }
+                delay(200)
+            }
+        }
+    }
+
+    private fun stopPositionPolling() {
+        positionPollingJob?.cancel()
+        positionPollingJob = null
+    }
+
     /**
      * Fades the player volume from its current level to 0 over ~3 seconds
      * (30 steps × 100 ms), then calls [stop].
@@ -278,6 +307,16 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _uiState.update { it.copy(isPlaying = isPlaying) }
+            if (isPlaying) startPositionPolling() else stopPositionPolling()
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) {
+                val dur = controller?.duration ?: C.TIME_UNSET
+                _uiState.update {
+                    it.copy(durationMs = if (dur == C.TIME_UNSET || dur <= 0) 0L else dur)
+                }
+            }
         }
 
         /**
@@ -298,6 +337,7 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         timerJob?.cancel()
+        positionPollingJob?.cancel()
         disconnect()
         super.onCleared()
     }

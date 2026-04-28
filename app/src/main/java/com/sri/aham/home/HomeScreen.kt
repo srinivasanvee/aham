@@ -53,7 +53,7 @@ import com.sri.aham.navigation.Route
 fun HomeScreen(onNavigate: (String) -> Unit) {
     val features = listOf(
         FeatureCard(
-            title       = "Mantra Meditation",
+            title       = "Meditation",
             description = "Loop sacred mantras and meditation",
             icon        = Icons.Outlined.SelfImprovement,
             route       = Route.MANTRA,
@@ -135,7 +135,7 @@ private fun WelcomeBanner() {
     ) {
         Column {
             Text(
-                text       = "अहम् ब्रह्मास्मि - அகம்",
+                text       = "INWARD - அகம்",
                 style      = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color      = MaterialTheme.colorScheme.onPrimaryContainer,

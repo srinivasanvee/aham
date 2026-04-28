@@ -51,6 +51,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -62,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -137,8 +139,9 @@ fun MantraScreen(viewModel: MantraViewModel = viewModel()) {
                 onPlay  = viewModel::play,
                 onPause = viewModel::pause,
                 onStop  = viewModel::stop,
-                onSetTimer   = viewModel::setTimer,
+                onSetTimer    = viewModel::setTimer,
                 onCancelTimer = viewModel::cancelTimer,
+                onSeekTo      = viewModel::seekTo,
                 modifier = Modifier.weight(0.58f),
             )
 
@@ -195,6 +198,7 @@ private fun HeroSection(
     onStop: () -> Unit,
     onSetTimer: (Int?) -> Unit,
     onCancelTimer: () -> Unit,
+    onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gradientColors = listOf(
@@ -231,6 +235,9 @@ private fun HeroSection(
                 onPause  = onPause,
                 onStop   = onStop,
             )
+
+            // Seek slider + time display
+            PlaybackProgressRow(uiState = uiState, onSeekTo = onSeekTo)
 
             // Sleep timer
             SleepTimerRow(
@@ -578,6 +585,59 @@ private fun SleepTimerRow(
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Playback progress
+// ---------------------------------------------------------------------------
+
+/**
+ * Seek slider and "position / duration" time label.
+ * Hidden when [MantraUiState.durationMs] is 0 (track not ready or duration unknown).
+ * While the user drags, ViewModel position updates are frozen so the thumb
+ * follows the drag position without fighting live polling.
+ */
+@Composable
+private fun PlaybackProgressRow(
+    uiState: MantraUiState,
+    onSeekTo: (Long) -> Unit,
+) {
+    if (uiState.durationMs <= 0L) return
+
+    var isDragging by remember { mutableStateOf(false) }
+    var dragPositionMs by remember { mutableFloatStateOf(0f) }
+
+    val sliderValue = if (isDragging) dragPositionMs else uiState.positionMs.toFloat()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Slider(
+            value = sliderValue,
+            onValueChange = { isDragging = true; dragPositionMs = it },
+            onValueChangeFinished = { onSeekTo(dragPositionMs.toLong()); isDragging = false },
+            valueRange = 0f..uiState.durationMs.toFloat(),
+            enabled = uiState.isReady,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            text = "${formatTime(sliderValue.toLong())} / ${formatTime(uiState.durationMs)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Formats [ms] milliseconds as `m:ss`, or `h:mm:ss` for durations ≥ 1 hour. */
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1_000
+    val h = totalSeconds / 3600
+    val m = (totalSeconds % 3600) / 60
+    val s = totalSeconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 /** Formats [seconds] as `mm:ss` (or `h:mm:ss` for durations ≥ 1 hour). */

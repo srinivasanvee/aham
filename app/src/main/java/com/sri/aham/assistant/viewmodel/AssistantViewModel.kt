@@ -24,7 +24,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** Set to true to use Ollama (via adb reverse) instead of MockInferenceEngine on emulator. */
-private const val USE_OLLAMA_ON_EMULATOR = false
+private const val USE_OLLAMA_ON_EMULATOR = true
 
 private fun isEmulator(): Boolean =
     Build.FINGERPRINT.startsWith("generic") ||
