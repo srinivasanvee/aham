@@ -46,6 +46,7 @@ data class AssistantUiState(
     val downloadedBytes: Long = 0L,
     val totalBytes: Long = 0L,
     val errorMessage: String? = null,
+    val hfToken: String = "",
 )
 
 class AssistantViewModel(app: Application) : AndroidViewModel(app) {
@@ -59,11 +60,17 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<AssistantUiState> = _uiState.asStateFlow()
 
     init {
+        _uiState.update { it.copy(hfToken = ModelManager.getHfToken(app)) }
         if (isEmulator() || ModelManager.isModelReady(app)) loadModel()
     }
 
     fun onInputChanged(text: String) {
         _uiState.update { it.copy(inputText = text) }
+    }
+
+    fun onHfTokenChanged(token: String) {
+        _uiState.update { it.copy(hfToken = token) }
+        ModelManager.saveHfToken(getApplication(), token)
     }
 
     fun sendMessage() {
@@ -115,6 +122,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(modelState = ModelState.DOWNLOADING, downloadProgress = 0f, downloadedBytes = 0L, totalBytes = 0L)
         }
 
+        val token = _uiState.value.hfToken
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val modelFile = ModelManager.modelFile(getApplication())
@@ -123,8 +131,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 // Follow redirects (HuggingFace redirects to CDN)
                 var connection = URL(url).openConnection() as HttpURLConnection
                 connection.instanceFollowRedirects = true
-                if (ModelManager.HF_TOKEN.isNotBlank()) {
-                    connection.setRequestProperty("Authorization", "Bearer ${ModelManager.HF_TOKEN}")
+                if (token.isNotBlank()) {
+                    connection.setRequestProperty("Authorization", "Bearer $token")
                 }
                 connection.connect()
                 var redirects = 0
@@ -133,8 +141,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     connection.disconnect()
                     connection = URL(location).openConnection() as HttpURLConnection
                     connection.instanceFollowRedirects = true
-                    if (ModelManager.HF_TOKEN.isNotBlank()) {
-                        connection.setRequestProperty("Authorization", "Bearer ${ModelManager.HF_TOKEN}")
+                    if (token.isNotBlank()) {
+                        connection.setRequestProperty("Authorization", "Bearer $token")
                     }
                     connection.connect()
                     redirects++

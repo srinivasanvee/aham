@@ -66,6 +66,8 @@ fun AssistantScreen(assistantViewModel: AssistantViewModel = viewModel()) {
                     downloadedBytes = uiState.downloadedBytes,
                     totalBytes = uiState.totalBytes,
                     errorMessage = uiState.errorMessage,
+                    hfToken = uiState.hfToken,
+                    onHfTokenChanged = assistantViewModel::onHfTokenChanged,
                     onDownload = assistantViewModel::downloadModel,
                     onRetry = assistantViewModel::retrySetup,
                 )

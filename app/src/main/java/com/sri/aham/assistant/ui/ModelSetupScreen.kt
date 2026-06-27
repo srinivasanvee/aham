@@ -11,16 +11,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sri.aham.assistant.viewmodel.ModelState
@@ -32,6 +42,8 @@ fun ModelSetupScreen(
     downloadedBytes: Long,
     totalBytes: Long,
     errorMessage: String?,
+    hfToken: String,
+    onHfTokenChanged: (String) -> Unit,
     onDownload: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -66,20 +78,26 @@ fun ModelSetupScreen(
             when (modelState) {
                 ModelState.NOT_READY -> {
                     Text(
-                        text = "Runs fully offline using Gemma 4 E2B (~2.6 GB). The model is downloaded once and stored on-device.",
+                        text = "Runs fully offline using Gemma 4 E2B (~2.6 GB). Downloaded once and stored on-device.",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(20.dp))
+                    HfTokenField(token = hfToken, onTokenChanged = onHfTokenChanged)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Requires a HuggingFace token with Gemma license accepted.\nSet HF_TOKEN in ModelManager.kt, or push manually:\nadb push gemma-4-E2B-it.litertlm \\\n  /data/data/com.sri.aham/files/models/",
+                        text = "Get a free token at huggingface.co/settings/tokens\nand accept the Gemma license on the model page.",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                     Spacer(Modifier.height(24.dp))
-                    Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onDownload,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = hfToken.isNotBlank(),
+                    ) {
                         Text("Download Model")
                     }
                 }
@@ -127,7 +145,9 @@ fun ModelSetupScreen(
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(16.dp))
+                    HfTokenField(token = hfToken, onTokenChanged = onHfTokenChanged)
+                    Spacer(Modifier.height(16.dp))
                     Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
                         Text("Retry")
                     }
@@ -137,4 +157,26 @@ fun ModelSetupScreen(
             }
         }
     }
+}
+
+@Composable
+private fun HfTokenField(token: String, onTokenChanged: (String) -> Unit) {
+    var showToken by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = token,
+        onValueChange = onTokenChanged,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("HuggingFace Token") },
+        placeholder = { Text("hf_…") },
+        singleLine = true,
+        visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = { showToken = !showToken }) {
+                Icon(
+                    imageVector = if (showToken) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    contentDescription = if (showToken) "Hide token" else "Show token",
+                )
+            }
+        },
+    )
 }
