@@ -123,6 +123,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 // Follow redirects (HuggingFace redirects to CDN)
                 var connection = URL(url).openConnection() as HttpURLConnection
                 connection.instanceFollowRedirects = true
+                if (ModelManager.HF_TOKEN.isNotBlank()) {
+                    connection.setRequestProperty("Authorization", "Bearer ${ModelManager.HF_TOKEN}")
+                }
                 connection.connect()
                 var redirects = 0
                 while (connection.responseCode in 300..399 && redirects < 5) {
@@ -130,6 +133,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     connection.disconnect()
                     connection = URL(location).openConnection() as HttpURLConnection
                     connection.instanceFollowRedirects = true
+                    if (ModelManager.HF_TOKEN.isNotBlank()) {
+                        connection.setRequestProperty("Authorization", "Bearer ${ModelManager.HF_TOKEN}")
+                    }
                     connection.connect()
                     redirects++
                 }
@@ -194,7 +200,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 ModelManager.modelFile(getApplication()).delete()
                 _uiState.update {
                     it.copy(
-                        modelState = ModelState.NOT_READY,
+                        modelState = ModelState.ERROR,
                         errorMessage = "Download failed: ${e.message}",
                     )
                 }
@@ -229,6 +235,11 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 _uiState.update { it.copy(modelState = ModelState.ERROR, errorMessage = message) }
             }
         }
+    }
+
+    fun retrySetup() {
+        clearError()
+        if (ModelManager.isModelReady(getApplication())) loadModel() else downloadModel()
     }
 
     fun clearError() {

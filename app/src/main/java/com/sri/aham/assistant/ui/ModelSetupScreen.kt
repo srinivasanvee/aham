@@ -66,14 +66,14 @@ fun ModelSetupScreen(
             when (modelState) {
                 ModelState.NOT_READY -> {
                     Text(
-                        text = "Runs fully offline using Gemma 4 (~600 MB). The model is downloaded once and stored on-device.",
+                        text = "Runs fully offline using Gemma 4 1B (~600 MB). The model is downloaded once and stored on-device.",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "You can also push the model manually:\nadb push gemma4-1b-it-int4.task \\\n  /data/data/com.sri.aham/files/models/",
+                        text = "Requires a HuggingFace token with Gemma license accepted.\nSet HF_TOKEN in ModelManager.kt, or push manually:\nadb push gemma4-1b-it-int4.litertlm \\\n  /data/data/com.sri.aham/files/models/",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),

@@ -67,10 +67,7 @@ fun AssistantScreen(assistantViewModel: AssistantViewModel = viewModel()) {
                     totalBytes = uiState.totalBytes,
                     errorMessage = uiState.errorMessage,
                     onDownload = assistantViewModel::downloadModel,
-                    onRetry = {
-                        assistantViewModel.clearError()
-                        assistantViewModel.loadModel()
-                    },
+                    onRetry = assistantViewModel::retrySetup,
                 )
             } else {
                 ChatContent(
