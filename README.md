@@ -21,6 +21,9 @@ A personal Android app built with Jetpack Compose and Material Design 3. "Aham" 
 
 ## Features
 
+### Breath Work ✅
+A guided three-round breathing practice with 30 paced breaths, a user-controlled exhale breath hold, and a 15-second recovery hold. Includes animated inhale/exhale cues, live hold timing, pause/reset controls, and an in-app safety reminder.
+
 ### Mantra / Meditation Player ✅
 Play sacred mantras or ambient meditation audio on seamless loop. Supports background playback via a foreground service so the audio continues while the user navigates away or locks the screen.
 
@@ -46,6 +49,10 @@ app/src/main/java/com/sri/aham/
 │   └── AppNavGraph.kt               # Compose Navigation graph
 ├── home/
 │   └── HomeScreen.kt                # Feature card grid
+├── breathwork/                       # Guided breathing + hold timer
+│   ├── model/                        # Pure session state machine
+│   ├── viewmodel/                    # Lifecycle-aware timer control
+│   └── ui/                           # Compose guidance screen
 ├── mantra/                          # Mantra / Meditation feature
 │   ├── model/
 │   │   └── Mantra.kt                # Data model

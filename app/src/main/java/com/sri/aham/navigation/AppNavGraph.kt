@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.sri.aham.breathwork.ui.BreathWorkScreen
 import com.sri.aham.home.HomeScreen
 import com.sri.aham.mantra.ui.MantraScreen
 import com.sri.aham.pomodoro.ui.PomodoroScreen
@@ -16,7 +17,8 @@ object Route {
     const val HOME      = "home"
     const val MANTRA    = "mantra"
     const val POMODORO  = "pomodoro"
-    // Add future routes here (e.g. JOURNAL, BREATH_TIMER).
+    const val BREATH_WORK = "breath_work"
+    // Add future routes here (e.g. JOURNAL, AFFIRMATIONS).
 }
 
 /**
@@ -47,6 +49,9 @@ fun AppNavGraph() {
         }
         composable(Route.POMODORO) {
             PomodoroScreen()
+        }
+        composable(Route.BREATH_WORK) {
+            BreathWorkScreen()
         }
     }
 }
