@@ -34,7 +34,18 @@ class BreathWorkSession {
 
     fun pause(state: BreathWorkState): BreathWorkState = state.copy(isRunning = false)
 
-    fun reset(): BreathWorkState = BreathWorkState()
+    fun reset(state: BreathWorkState = BreathWorkState()): BreathWorkState =
+        BreathWorkState(
+            totalRounds = state.totalRounds,
+            breathsPerRound = state.breathsPerRound.coerceIn(MIN_BREATHS_PER_ROUND, MAX_BREATHS_PER_ROUND),
+        )
+
+    fun setBreathsPerRound(state: BreathWorkState, breaths: Int): BreathWorkState {
+        if (state.phase != BreathWorkPhase.READY) return state
+        return state.copy(
+            breathsPerRound = breaths.coerceIn(MIN_BREATHS_PER_ROUND, MAX_BREATHS_PER_ROUND),
+        )
+    }
 
     fun tick(state: BreathWorkState): BreathWorkState {
         if (!state.isRunning) return state
@@ -102,7 +113,10 @@ class BreathWorkSession {
         )
     }
 
-    private companion object {
+    companion object {
+        const val MIN_BREATHS_PER_ROUND = 5
+        const val MAX_BREATHS_PER_ROUND = 60
+        const val BREATH_COUNT_STEP = 5
         const val BREATH_CUE_SECONDS = 2
         const val RECOVERY_HOLD_SECONDS = 15
     }

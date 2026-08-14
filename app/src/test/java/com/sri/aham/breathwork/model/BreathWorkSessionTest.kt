@@ -58,4 +58,29 @@ class BreathWorkSessionTest {
         val paused = session.pause(session.start())
         assertEquals(paused, session.tick(paused))
     }
+
+    @Test
+    fun breathCountCanBeCustomizedBeforeStarting() {
+        val configured = session.setBreathsPerRound(BreathWorkState(), 20)
+        var state = session.start(configured)
+        repeat(20 * 4) { state = session.tick(state) }
+        assertEquals(BreathWorkPhase.EXHALE_HOLD, state.phase)
+        assertEquals(20, state.breathNumber)
+    }
+
+    @Test
+    fun breathCountIsBoundedAndCannotChangeDuringSession() {
+        assertEquals(5, session.setBreathsPerRound(BreathWorkState(), -10).breathsPerRound)
+        assertEquals(60, session.setBreathsPerRound(BreathWorkState(), 100).breathsPerRound)
+
+        val running = session.start(BreathWorkState(breathsPerRound = 20))
+        assertEquals(running, session.setBreathsPerRound(running, 40))
+    }
+
+    @Test
+    fun resetPreservesCustomizedBreathCount() {
+        val configured = BreathWorkState(breathsPerRound = 45)
+        assertEquals(45, session.reset(configured).breathsPerRound)
+        assertEquals(BreathWorkPhase.READY, session.reset(configured).phase)
+    }
 }
