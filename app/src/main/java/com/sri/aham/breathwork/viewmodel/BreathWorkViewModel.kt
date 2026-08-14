@@ -31,7 +31,11 @@ class BreathWorkViewModel : ViewModel() {
     fun reset() {
         timerJob?.cancel()
         timerJob = null
-        _uiState.value = session.reset()
+        _uiState.value = session.reset(_uiState.value)
+    }
+
+    fun setBreathsPerRound(breaths: Int) {
+        _uiState.value = session.setBreathsPerRound(_uiState.value, breaths)
     }
 
     fun finishBreathing() {

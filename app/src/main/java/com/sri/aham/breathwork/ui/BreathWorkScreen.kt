@@ -1,5 +1,6 @@
 package com.sri.aham.breathwork.ui
 
+import android.speech.tts.TextToSpeech
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -19,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,13 +32,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sri.aham.breathwork.model.BreathCue
 import com.sri.aham.breathwork.model.BreathWorkPhase
+import com.sri.aham.breathwork.model.BreathWorkSession
 import com.sri.aham.breathwork.model.BreathWorkState
 import com.sri.aham.breathwork.viewmodel.BreathWorkViewModel
 
@@ -52,6 +63,8 @@ import com.sri.aham.breathwork.viewmodel.BreathWorkViewModel
 @Composable
 fun BreathWorkScreen(vm: BreathWorkViewModel = viewModel()) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    var guidedVoiceEnabled by remember { mutableStateOf(true) }
+    GuidedVoice(state = state, enabled = guidedVoiceEnabled)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -72,6 +85,14 @@ fun BreathWorkScreen(vm: BreathWorkViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             SafetyCard()
+            if (state.phase == BreathWorkPhase.READY) {
+                SessionSettings(
+                    state = state,
+                    guidedVoiceEnabled = guidedVoiceEnabled,
+                    onGuidedVoiceChanged = { guidedVoiceEnabled = it },
+                    onBreathsChanged = vm::setBreathsPerRound,
+                )
+            }
             Text(
                 text = "Round ${state.round} of ${state.totalRounds}",
                 style = MaterialTheme.typography.titleMedium,
@@ -81,6 +102,112 @@ fun BreathWorkScreen(vm: BreathWorkViewModel = viewModel()) {
             Instructions(state)
             Controls(state, vm)
             Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun SessionSettings(
+    state: BreathWorkState,
+    guidedVoiceEnabled: Boolean,
+    onGuidedVoiceChanged: (Boolean) -> Unit,
+    onBreathsChanged: (Int) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Session settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text("Breaths per round", style = MaterialTheme.typography.bodyLarge)
+                    Text("5–60 breaths", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilledIconButton(
+                        onClick = { onBreathsChanged(state.breathsPerRound - BreathWorkSession.BREATH_COUNT_STEP) },
+                        enabled = state.breathsPerRound > BreathWorkSession.MIN_BREATHS_PER_ROUND,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(Icons.Outlined.Remove, contentDescription = "Decrease breaths")
+                    }
+                    Text(
+                        state.breathsPerRound.toString(),
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    FilledIconButton(
+                        onClick = { onBreathsChanged(state.breathsPerRound + BreathWorkSession.BREATH_COUNT_STEP) },
+                        enabled = state.breathsPerRound < BreathWorkSession.MAX_BREATHS_PER_ROUND,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = "Increase breaths")
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Guided voice", style = MaterialTheme.typography.bodyLarge)
+                    Text("Speaks breathing and hold cues", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = guidedVoiceEnabled, onCheckedChange = onGuidedVoiceChanged)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuidedVoice(state: BreathWorkState, enabled: Boolean) {
+    val context = LocalContext.current
+    var engine by remember { mutableStateOf<TextToSpeech?>(null) }
+    var isReady by remember { mutableStateOf(false) }
+
+    DisposableEffect(context) {
+        val textToSpeech = TextToSpeech(context.applicationContext) { status ->
+            isReady = status == TextToSpeech.SUCCESS
+        }
+        engine = textToSpeech
+        onDispose {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+            engine = null
+            isReady = false
+        }
+    }
+
+    val spokenCue = when {
+        !state.isRunning && state.phase != BreathWorkPhase.COMPLETE -> null
+        state.phase == BreathWorkPhase.BREATHING && state.cue == BreathCue.INHALE -> "Breathe in"
+        state.phase == BreathWorkPhase.BREATHING -> "Breathe out"
+        state.phase == BreathWorkPhase.EXHALE_HOLD -> "Exhale fully, and hold"
+        state.phase == BreathWorkPhase.RECOVERY_HOLD -> "Breathe in fully, and hold"
+        state.phase == BreathWorkPhase.COMPLETE -> "Session complete. Breathe normally"
+        else -> null
+    }
+    val cueKey = when (state.phase) {
+        BreathWorkPhase.BREATHING -> "${state.phase}-${state.round}-${state.breathNumber}-${state.cue}"
+        BreathWorkPhase.EXHALE_HOLD, BreathWorkPhase.RECOVERY_HOLD -> "${state.phase}-${state.round}"
+        else -> state.phase.toString()
+    }
+
+    LaunchedEffect(enabled, isReady, state.isRunning, cueKey) {
+        if (enabled && isReady && spokenCue != null) {
+            engine?.speak(spokenCue, TextToSpeech.QUEUE_FLUSH, null, cueKey)
+        } else if (!enabled || !state.isRunning) {
+            engine?.stop()
         }
     }
 }
@@ -154,7 +281,7 @@ private fun formatSeconds(total: Int): String = "%d:%02d".format(total / 60, tot
 @Composable
 private fun Instructions(state: BreathWorkState) {
     val text = when (state.phase) {
-        BreathWorkPhase.READY -> "Three rounds: 30 deep breaths, a comfortable exhale hold, then a 15-second recovery hold."
+        BreathWorkPhase.READY -> "Three rounds: ${state.breathsPerRound} deep breaths, a comfortable exhale hold, then a 15-second recovery hold."
         BreathWorkPhase.BREATHING -> "Breathe deeply without forcing. Keep your body relaxed."
         BreathWorkPhase.EXHALE_HOLD -> "Stay relaxed. Tap when you feel the natural urge to breathe—never force the hold."
         BreathWorkPhase.RECOVERY_HOLD -> "Inhale fully and hold gently until the countdown finishes."
