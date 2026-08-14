@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -123,6 +124,7 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
      * Audio keeps playing after the UI navigates away.
      */
     fun disconnect() {
+        stopPositionPolling()
         controller?.removeListener(playerListener)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null
@@ -146,7 +148,22 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
         val ctrl = controller ?: return
         val ctx = getApplication<Application>()
         val uri = Uri.parse("android.resource://${ctx.packageName}/$audioRes")
-        ctrl.setMediaItem(MediaItem.fromUri(uri))
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(mantra.id)
+            .setUri(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(mantra.title)
+                    .setDescription(mantra.description)
+                    .build(),
+            )
+            .build()
+        ctrl.repeatMode = if (mantra.category == MantraCategory.GUIDED) {
+            Player.REPEAT_MODE_OFF
+        } else {
+            Player.REPEAT_MODE_ONE
+        }
+        ctrl.setMediaItem(mediaItem)
         ctrl.prepare()
         ctrl.play()
         _uiState.update { it.copy(selected = mantra, loopCount = 0, positionMs = 0L, durationMs = 0L) }
@@ -178,8 +195,9 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Seeks to [positionMs] and immediately reflects the new position in state. */
     fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs)
-        _uiState.update { it.copy(positionMs = positionMs) }
+        val safePosition = positionMs.coerceIn(0L, _uiState.value.durationMs.coerceAtLeast(0L))
+        controller?.seekTo(safePosition)
+        _uiState.update { it.copy(positionMs = safePosition) }
     }
 
     // -------------------------------------------------------------------------
@@ -233,17 +251,20 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Switches the active tab and stops playback if the selected track is in a different category. */
     fun setTab(category: MantraCategory) {
+        val stopNeeded = _uiState.value.selected?.category != null &&
+            _uiState.value.selected?.category != category
+        if (stopNeeded) {
+            cancelTimer()
+            controller?.stop()
+            stopPositionPolling()
+        }
         _uiState.update { state ->
-            val stopNeeded = state.selected != null && state.selected.category != category
-            if (stopNeeded) {
-                cancelTimer()
-                restoreVolume()
-                controller?.stop()
-            }
             state.copy(
                 selectedTab = category,
                 selected = if (stopNeeded) null else state.selected,
                 isPlaying = if (stopNeeded) false else state.isPlaying,
+                positionMs = if (stopNeeded) 0L else state.positionMs,
+                durationMs = if (stopNeeded) 0L else state.durationMs,
             )
         }
     }
@@ -295,7 +316,20 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
     /** Reads live player state and pushes it into [_uiState]. */
     private fun syncState() {
         val ctrl = controller ?: return
-        _uiState.update { it.copy(isPlaying = ctrl.isPlaying, isReady = true) }
+        val duration = ctrl.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L
+        val mediaId = ctrl.currentMediaItem?.mediaId
+        _uiState.update { state ->
+            val selected = state.allMantras.firstOrNull { it.id == mediaId } ?: state.selected
+            state.copy(
+                selected = selected,
+                selectedTab = selected?.category ?: state.selectedTab,
+                isPlaying = ctrl.isPlaying,
+                isReady = true,
+                positionMs = ctrl.currentPosition.coerceAtLeast(0L),
+                durationMs = duration,
+            )
+        }
+        if (ctrl.isPlaying) startPositionPolling()
     }
 
     /**
@@ -315,6 +349,12 @@ class MantraViewModel(application: Application) : AndroidViewModel(application) 
                 val dur = controller?.duration ?: C.TIME_UNSET
                 _uiState.update {
                     it.copy(durationMs = if (dur == C.TIME_UNSET || dur <= 0) 0L else dur)
+                }
+            }
+            if (playbackState == Player.STATE_ENDED) {
+                stopPositionPolling()
+                _uiState.update { state ->
+                    state.copy(isPlaying = false, positionMs = state.durationMs)
                 }
             }
         }
