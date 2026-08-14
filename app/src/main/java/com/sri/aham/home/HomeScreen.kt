@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Card
@@ -63,9 +64,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             icon        = Icons.Outlined.Timer,
             route       = Route.POMODORO,
         ),
+        FeatureCard(
+            title       = "Breath Work",
+            description = "Guided breathing and breath-hold timer",
+            icon        = Icons.Outlined.Air,
+            route       = Route.BREATH_WORK,
+        ),
         // Uncomment as features are implemented:
         // FeatureCard("Journal",      "Daily gratitude & reflection",     Icons.Outlined.EditNote,     Route.JOURNAL),
-        // FeatureCard("Breath Timer", "Guided box breathing & 4-7-8",    Icons.Outlined.Air,          Route.BREATH_TIMER),
         // FeatureCard("Affirmations", "Positive daily affirmations",      Icons.Outlined.AutoAwesome,  Route.AFFIRMATIONS),
     )
 

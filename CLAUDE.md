@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Navigation:** All routes defined in `navigation/AppNavGraph.kt` as `Route` object constants. Screens receive `onNavigate: (String) -> Unit` and don't reference other features' routes directly.
 
-**Feature packages** are self-contained: `mantra/` and `pomodoro/`. Each follows `data/ → model/ → viewmodel/ → ui/` layering.
+**Feature packages** are self-contained: `breathwork/`, `mantra/`, and `pomodoro/`. Each follows the relevant subset of `data/ → model/ → viewmodel/ → ui/` layering.
 
 **State:** Each feature exposes a `UiState` data class via `StateFlow` from its ViewModel. ViewModels are created via the `viewModel()` composable (no DI).
 
@@ -40,6 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |---|---|
 | Mantra Player (looping, sleep timer, tabs, Om animation) | Complete |
 | Pomodoro Timer (work/break cycles, notifications) | Complete |
+| Breath Work (paced breathing, exhale hold timer, recovery hold) | Complete |
 
 ## Key Subsystems
 
@@ -52,6 +53,10 @@ To add a new audio track: add the file to `res/raw/`, then add an entry to `Mant
 ### Pomodoro (`pomodoro/`)
 
 Self-contained timer state machine in `PomodoroViewModel`. Posts `NotificationCompat` notifications at phase transitions via a `NotificationChannel` created in `init`.
+
+### Breath Work (`breathwork/`)
+
+`BreathWorkSession` is a pure, unit-tested state machine for three rounds of paced breathing, exhale retention, and recovery retention. `BreathWorkViewModel` owns the one-second ticker, while `BreathWorkScreen` renders cues, timing, controls, and safety guidance.
 
 ## Release Pipeline
 
