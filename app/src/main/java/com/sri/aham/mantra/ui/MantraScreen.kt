@@ -17,6 +17,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -114,7 +115,7 @@ fun MantraScreen(viewModel: MantraViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mantra Player") },
+                title = { Text(if (uiState.selectedTab == MantraCategory.GUIDED) "Meditation" else "Mantra Player") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -206,23 +207,24 @@ private fun HeroSection(
         MaterialTheme.colorScheme.surface,
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .background(Brush.verticalGradient(gradientColors)),
         contentAlignment = Alignment.TopCenter,
     ) {
+        val compact = maxHeight < 460.dp
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = if (compact) 6.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
             // Pulsing Om mandala
             OmMandala(
                 isPlaying = uiState.isPlaying,
-                modifier  = Modifier.size(160.dp),
+                modifier  = Modifier.size(if (compact) 96.dp else 140.dp),
             )
 
             // Now-playing info
@@ -393,7 +395,9 @@ private fun NowPlayingInfo(uiState: MantraUiState) {
         val statusText = when {
             !uiState.isReady          -> "Connecting…"
             uiState.isFadingOut       -> "Fading out…"
+            uiState.isPlaying && uiState.selected?.category == MantraCategory.GUIDED -> "▶  In session"
             uiState.isPlaying         -> "▶  Playing  ∞"
+            uiState.durationMs > 0L && uiState.positionMs >= uiState.durationMs -> "✓  Complete"
             uiState.selected != null  -> "⏸  Paused"
             else                      -> "—"
         }
@@ -497,7 +501,7 @@ private fun SleepTimerRow(
         if (uiState.timerRemainingSeconds != null) {
             // ── Timer running ────────────────────────────────────────────
             val totalSeconds = (uiState.timerMinutes ?: 1) * 60f
-            val progress = uiState.timerRemainingSeconds / totalSeconds
+            val progress = (uiState.timerRemainingSeconds / totalSeconds).coerceIn(0f, 1f)
 
             val progressColor by animateColorAsState(
                 targetValue = if (uiState.isFadingOut)
@@ -607,7 +611,9 @@ private fun PlaybackProgressRow(
     var isDragging by remember { mutableStateOf(false) }
     var dragPositionMs by remember { mutableFloatStateOf(0f) }
 
-    val sliderValue = if (isDragging) dragPositionMs else uiState.positionMs.toFloat()
+    val sliderValue = (if (isDragging) dragPositionMs else uiState.positionMs.toFloat())
+        .coerceIn(0f, uiState.durationMs.toFloat())
+    val remainingMs = (uiState.durationMs - sliderValue.toLong()).coerceAtLeast(0L)
 
     Column(
         modifier = Modifier
@@ -623,11 +629,18 @@ private fun PlaybackProgressRow(
             enabled = uiState.isReady,
             modifier = Modifier.fillMaxWidth(),
         )
-        Text(
-            text = "${formatTime(sliderValue.toLong())} / ${formatTime(uiState.durationMs)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                text = formatTime(sliderValue.toLong()),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "−${formatTime(remainingMs)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
