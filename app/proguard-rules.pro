@@ -5,17 +5,6 @@
 -renamesourcefileattribute SourceFile
 
 # ---------------------------------------------------------------------------
-# LiteRT-LM — on-device LLM inference
-# ---------------------------------------------------------------------------
--keep class com.google.ai.edge.litertlm.** { *; }
--dontwarn com.google.ai.edge.litertlm.**
-
-# LiteRT flatbuffer / TFLite internals used by LiteRT-LM
--keep class org.tensorflow.** { *; }
--keep class com.google.android.odml.** { *; }
--dontwarn org.tensorflow.**
-
-# ---------------------------------------------------------------------------
 # Native JNI — keep all methods called from native code
 # ---------------------------------------------------------------------------
 -keepclasseswithmembernames class * {
