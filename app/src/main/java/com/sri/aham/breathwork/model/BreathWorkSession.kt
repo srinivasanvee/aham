@@ -14,6 +14,8 @@ data class BreathWorkState(
     val phaseSecondsRemaining: Int = 0,
     val holdSecondsElapsed: Int = 0,
     val isRunning: Boolean = false,
+    val cueSeconds: Int = 2,
+    val retentionHistory: List<Int> = emptyList(),
 )
 
 /** Pure state machine for the guided breathing protocol. */
@@ -23,7 +25,7 @@ class BreathWorkSession {
             phase = BreathWorkPhase.BREATHING,
             cue = BreathCue.INHALE,
             breathNumber = 1,
-            phaseSecondsRemaining = BREATH_CUE_SECONDS,
+            phaseSecondsRemaining = state.cueSeconds,
             isRunning = true,
         )
         BreathWorkPhase.BREATHING,
@@ -37,6 +39,7 @@ class BreathWorkSession {
     fun reset(state: BreathWorkState = BreathWorkState()): BreathWorkState =
         BreathWorkState(
             totalRounds = state.totalRounds,
+            cueSeconds = state.cueSeconds,
             breathsPerRound = state.breathsPerRound.coerceIn(MIN_BREATHS_PER_ROUND, MAX_BREATHS_PER_ROUND),
         )
 
@@ -45,6 +48,11 @@ class BreathWorkSession {
         return state.copy(
             breathsPerRound = breaths.coerceIn(MIN_BREATHS_PER_ROUND, MAX_BREATHS_PER_ROUND),
         )
+    }
+
+    fun configure(state: BreathWorkState, rounds: Int, cueSeconds: Int): BreathWorkState {
+        if (state.phase != BreathWorkPhase.READY) return state
+        return state.copy(totalRounds = rounds.coerceIn(1, 5), cueSeconds = cueSeconds.coerceIn(2, 4))
     }
 
     fun tick(state: BreathWorkState): BreathWorkState {
@@ -71,6 +79,7 @@ class BreathWorkSession {
         if (state.phase != BreathWorkPhase.EXHALE_HOLD) return state
         return state.copy(
             phase = BreathWorkPhase.RECOVERY_HOLD,
+            retentionHistory = state.retentionHistory + state.holdSecondsElapsed,
             phaseSecondsRemaining = RECOVERY_HOLD_SECONDS,
             isRunning = true,
         )
@@ -81,13 +90,13 @@ class BreathWorkSession {
             return state.copy(phaseSecondsRemaining = state.phaseSecondsRemaining - 1)
         }
         if (state.cue == BreathCue.INHALE) {
-            return state.copy(cue = BreathCue.EXHALE, phaseSecondsRemaining = BREATH_CUE_SECONDS)
+            return state.copy(cue = BreathCue.EXHALE, phaseSecondsRemaining = state.cueSeconds)
         }
         if (state.breathNumber >= state.breathsPerRound) return finishBreathing(state)
         return state.copy(
             cue = BreathCue.INHALE,
             breathNumber = state.breathNumber + 1,
-            phaseSecondsRemaining = BREATH_CUE_SECONDS,
+            phaseSecondsRemaining = state.cueSeconds,
         )
     }
 
@@ -107,7 +116,7 @@ class BreathWorkSession {
             cue = BreathCue.INHALE,
             round = state.round + 1,
             breathNumber = 1,
-            phaseSecondsRemaining = BREATH_CUE_SECONDS,
+            phaseSecondsRemaining = state.cueSeconds,
             holdSecondsElapsed = 0,
             isRunning = true,
         )
