@@ -87,7 +87,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
         },
     ) { padding ->
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(160.dp),
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
@@ -96,7 +96,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Full-width header banner
-            item(span = { GridItemSpan(2) }) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 WelcomeBanner()
             }
 
@@ -134,14 +134,14 @@ private fun WelcomeBanner() {
     ) {
         Column {
             Text(
-                text       = "INWARD - அகம்",
+                text       = "A moment for yourself",
                 style      = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color      = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text  = "I am the universe · Your personal companion",
+                text  = "Breathe, settle your mind, or make space to focus. அகம்",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
             )
@@ -167,8 +167,7 @@ private fun FeatureCardItem(feature: FeatureCard, onClick: () -> Unit) {
     Card(
         onClick  = onClick,
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f),
+            .fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
         ),
@@ -176,7 +175,6 @@ private fun FeatureCardItem(feature: FeatureCard, onClick: () -> Unit) {
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,

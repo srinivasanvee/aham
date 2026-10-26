@@ -9,6 +9,34 @@ class BreathWorkSessionTest {
     private val session = BreathWorkSession()
 
     @Test
+    fun customPaceAndRoundsCompleteWithRetentionSummary() {
+        var state = session.configure(BreathWorkState(breathsPerRound = 5), 2, 3)
+        state = session.start(state)
+        repeat(2) { round ->
+            repeat(30) { state = session.tick(state) }
+            assertEquals(BreathWorkPhase.EXHALE_HOLD, state.phase)
+            repeat(7 + round) { state = session.tick(state) }
+            state = session.releaseHold(state)
+            repeat(15) { state = session.tick(state) }
+        }
+        assertEquals(BreathWorkPhase.COMPLETE, state.phase)
+        assertEquals(listOf(7, 8), state.retentionHistory)
+        val reset = session.reset(state)
+        assertEquals(2, reset.totalRounds)
+        assertEquals(3, reset.cueSeconds)
+        assertTrue(reset.retentionHistory.isEmpty())
+    }
+
+    @Test
+    fun configurationIsBoundedAndLockedDuringPractice() {
+        val ready = session.configure(BreathWorkState(), 100, 0)
+        assertEquals(5, ready.totalRounds)
+        assertEquals(2, ready.cueSeconds)
+        val running = session.start(ready)
+        assertEquals(running, session.configure(running, 1, 4))
+    }
+
+    @Test
     fun startBeginsFirstInhale() {
         val state = session.start()
         assertEquals(BreathWorkPhase.BREATHING, state.phase)

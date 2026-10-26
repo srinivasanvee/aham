@@ -1,6 +1,7 @@
 package com.sri.aham.breathwork.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sri.aham.breathwork.model.BreathWorkSession
 import com.sri.aham.breathwork.model.BreathWorkState
@@ -11,9 +12,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class BreathWorkViewModel : ViewModel() {
+class BreathWorkViewModel(application: Application) : AndroidViewModel(application) {
+    private val preferences = application.getSharedPreferences("breath_work", 0)
     private val session = BreathWorkSession()
-    private val _uiState = MutableStateFlow(BreathWorkState())
+    private val _uiState = MutableStateFlow(BreathWorkState(
+        breathsPerRound = preferences.getInt("breaths", 30).coerceIn(5, 60),
+        totalRounds = preferences.getInt("rounds", 3).coerceIn(1, 5),
+        cueSeconds = preferences.getInt("pace", 2).coerceIn(2, 4),
+    ))
     val uiState: StateFlow<BreathWorkState> = _uiState.asStateFlow()
     private var timerJob: Job? = null
 
@@ -36,6 +42,18 @@ class BreathWorkViewModel : ViewModel() {
 
     fun setBreathsPerRound(breaths: Int) {
         _uiState.value = session.setBreathsPerRound(_uiState.value, breaths)
+        saveSettings()
+    }
+
+    fun configure(rounds: Int, cueSeconds: Int) {
+        _uiState.value = session.configure(_uiState.value, rounds, cueSeconds)
+        saveSettings()
+    }
+
+    private fun saveSettings() {
+        preferences.edit().putInt("breaths", _uiState.value.breathsPerRound)
+            .putInt("rounds", _uiState.value.totalRounds)
+            .putInt("pace", _uiState.value.cueSeconds).apply()
     }
 
     fun finishBreathing() {
